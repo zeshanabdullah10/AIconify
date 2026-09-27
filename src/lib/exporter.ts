@@ -145,6 +145,10 @@ export function exportEntries(project: Project, o: ExportOptions, rasterize: Ras
     icons.forEach((icon, k) => {
       out.push({ path: `labview/vi-icons/${files[k]}.png`, data: png(() => viIcon(drawn(icon, 20), banner), 32) });
       out.push({ path: `labview/glyphs/${files[k]}.png`, data: png(() => glyph(drawn(icon, 28), pixelArt), 32) });
+      if (o.emf) {
+        out.push({ path: `labview/vi-icons/${files[k]}.emf`, data: () => svgToEmf(viIcon(drawn(icon, 20), banner), 32) });
+        out.push({ path: `labview/glyphs/${files[k]}.emf`, data: () => svgToEmf(glyph(drawn(icon, 28), pixelArt), 32) });
+      }
     });
   }
   if (o.indicators) {

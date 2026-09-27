@@ -44,7 +44,7 @@ Everything here is drawn in the browser from the traced icons, so it costs nothi
 | Option | In the zip |
 | --- | --- |
 | Densities | `@1.5x` and `@2x` PNGs next to every 1× file, since LabVIEW doesn't rescale images. |
-| EMF | `emf/*.emf` Windows vector files that LabVIEW scales without blurring. |
+| EMF | Every LabVIEW picture also comes as a Windows vector `.emf` next to its PNG: `emf/*.emf` for the icons, plus button states, VI icons, glyphs, equipment states and indicators. LabVIEW scales them without blurring. They use only solid colours and non-overlapping filled polygons (lines are converted to their exact outlines with [Clipper](https://www.angusj.com/clipper2/Docs/Overview.htm)), so every EMF player draws them the same way, whichever fill rule it applies. |
 | Pixel snap | On by default: straight edges land on whole pixels in PNGs of 64 px and below, and in VI icons. Curves are left alone, and bars thinner than a pixel stay one pixel wide. |
 | Button states | `labview/buttons/<icon>/{false,true,false-to-true,true-to-false}.png` at 32, 48 or 64 px, for a custom boolean's four pictures. Four styles: **ISA-101** (flat grey, a bar shows the state), **Modern** (tinted face and outline when true), **Classic** (bevelled, stays pressed in) and **Toggle** (a switch with the icon on its knob). Square, or wide with room for LabVIEW's own Boolean text. |
 | VI icons | `labview/vi-icons/*.png`: 32×32 with a frame and an optional banner (up to 7 characters in a 3×5 pixel font), plus `labview/glyphs/*.png` for the Icon Editor. Pixel-art icons are used at their own 32×32 grid, without a banner. |
@@ -91,7 +91,7 @@ src/lib/        framework-free core (runs in Node for tests)
   paths.ts        SVG path parsing, transforms, pixel-grid snapping and optical line widths
   centerline.ts   line work traced as stroked centerlines
   quality.ts      set checks: weight, centring and detail against the rest of the set
-  emf.ts          EMF writer for filled and stroked paths
+  emf.ts          EMF writer: strokes become exact outlines, everything filled polygons
   labview.ts      button skins and states, HMI equipment states, VI icons, import guide
   indicators.ts   LEDs, pilot lamps and tank levels
   samples.ts      hand-drawn sample icons for the live style preview

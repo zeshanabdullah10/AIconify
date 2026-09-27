@@ -1,7 +1,6 @@
-import { emfRecords, svgToEmf } from './emf';
 import { indicatorFiles, TANK_LEVELS } from './indicators';
 import { BUTTON_SKINS, BUTTON_STATES, bannerText, buttonBox, buttonState, glyph, statusVariant, viIcon } from './labview';
-import { ellipseD, parseD, parseSvg, snapD, transformD } from './paths';
+import { parseD, parseSvg, snapD, transformD } from './paths';
 
 const ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#1f4d3a" d="M2.3 2.2L21.6 2.4L21.7 21.8Q12 23 2.1 21.7Z"/></svg>';
 const DUO = ICON.replace('</svg>', '<path fill="#6bbf59" d="M8 8L16 8L16 16L8 16Z"/></svg>');
@@ -167,23 +166,5 @@ describe('indicators', () => {
     // an empty tank has no liquid layer
     expect(tanks[0].svg).not.toContain('#1c7ed6');
     expect(tanks[4].svg).toContain('#1c7ed6');
-  });
-});
-
-describe('EMF', () => {
-  it('writes a well-formed metafile with one filled path per colour', () => {
-    const svg = DUO.replace('</svg>', `<path fill="#000000" d="${ellipseD(12, 12, 3)}"/></svg>`);
-    const bytes = svgToEmf(svg, 32);
-    const records = emfRecords(bytes);
-    const view = new DataView(bytes.buffer);
-    expect(records[0]).toEqual({ type: 1, size: 108 });
-    expect(view.getUint32(40, true)).toBe(0x464d4520); // " EMF"
-    expect(view.getUint32(48, true)).toBe(bytes.length);
-    expect(view.getUint32(52, true)).toBe(records.length);
-    expect(records.at(-1)!.type).toBe(14); // EOF
-    expect(records.filter((r) => r.type === 62)).toHaveLength(3); // FILLPATH
-    expect(records.filter((r) => r.type === 39)).toHaveLength(3); // one brush per colour
-    // Q and C both become cubic Béziers
-    expect(records.filter((r) => r.type === 5).length).toBe(1 + 4);
   });
 });

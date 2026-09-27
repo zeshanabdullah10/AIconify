@@ -325,7 +325,7 @@ export function labviewGuide(opts: { buttons: boolean; viIcons: boolean; indicat
       '',
       '1. Place a boolean (for example a Flat Square Button) on the front panel, right-click it and choose **Advanced » Customize…**.',
       '2. In the Control Editor, switch to **Customize Mode** (the wrench button).',
-      '3. Right-click the button face and choose **Import from File…**, then pick `false.png`.',
+      '3. Right-click the button face and choose **Import from File…**, then pick `false.emf` (or `false.png`).',
       '4. Right-click again, open **Picture Item** and select the next picture. LabVIEW names them False, True, True to False and False to True; import the file with the matching name for each.',
       '5. Save the control as a `.ctl` and use it like any other control.',
       '',
@@ -337,6 +337,7 @@ export function labviewGuide(opts: { buttons: boolean; viIcons: boolean; indicat
       '## VI icons (`labview/vi-icons/`, `labview/glyphs/`)',
       '',
       '- `vi-icons/*.png` are finished 32×32 icons. Open the VI\'s Icon Editor and import or paste the image over the whole icon.',
+      '- The `.emf` next to each PNG is the same picture as a vector, for places where LabVIEW scales it.',
       '- `glyphs/*.png` are the glyphs alone. Copy them into the `Glyphs` folder under your LabVIEW Data directory (usually `Documents\\LabVIEW Data\\Glyphs`) and they appear in the Icon Editor\'s glyph library.',
       '',
     );
@@ -365,7 +366,9 @@ export function labviewGuide(opts: { buttons: boolean; viIcons: boolean; indicat
     lines.push(
       '## EMF vectors',
       '',
-      'On Windows, drag an `.emf` file onto the front panel or import it as a decoration. It scales without blurring on high-DPI screens.',
+      'Every picture above also comes as an `.emf` next to its PNG: icons in `emf/`, button states, VI icons and glyphs, states and indicators. On Windows, import one with **Import from File…** or drag it onto the front panel; it scales without blurring on high-DPI screens.',
+      '',
+      'The EMFs use only solid colours and filled polygons (lines are converted to outlines), the subset every Windows EMF player draws the same way. They carry no transparency information beyond what is not drawn, so the background shows through.',
       '',
     );
   lines.push('## High-DPI screens', '', 'LabVIEW does not rescale images, so `@1.5x` and `@2x` PNGs are included when selected. Use the size that matches your display scaling.', '');

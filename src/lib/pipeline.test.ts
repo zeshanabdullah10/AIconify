@@ -216,7 +216,11 @@ describe('LabVIEW and industrial export', () => {
         'labview/buttons/pump/false-to-true.emf',
         'labview/buttons/pump/true-to-false.png',
         'labview/vi-icons/pump.png',
+        'labview/vi-icons/pump.emf',
         'labview/glyphs/pump.png',
+        'labview/glyphs/pump.emf',
+        'states/alarm/pump.emf',
+        'labview/indicators/round-led-green-on.emf',
         'states/alarm/pump.svg',
         'states/offline/24/pump.png',
         'states/on/pump.svg',
@@ -238,6 +242,17 @@ describe('LabVIEW and industrial export', () => {
     const guide = await zip.file('labview/README.md')!.async('string');
     expect(guide).toContain('Customize');
     expect(guide).toContain('Picture Ring');
+  });
+
+  it('gives every LabVIEW picture an EMF twin when EMF is on', () => {
+    const planned = new Set(planFiles(p, all));
+    const pngs = [...planned].filter((f) => (f.startsWith('labview/') || f.startsWith('states/')) && f.endsWith('.png') && !f.includes('@'));
+    expect(pngs.length).toBeGreaterThan(10);
+    for (const f of pngs) {
+      // State PNGs sit in a size folder; their one EMF sits next to the SVG.
+      const emf = f.replace(/^(states\/[^/]+)\/\d+\//, '$1/').replace(/\.png$/, '.emf');
+      expect(planned.has(emf), `${f} → ${emf}`).toBe(true);
+    }
   });
 
   it('snaps small PNGs to the pixel grid only when asked', async () => {

@@ -42,11 +42,10 @@ describe('stroked paths and parts', () => {
     expect(opticalSvg(filled, 16)).toBe(filled);
   });
 
-  it('writes a geometric pen and a stroked path to EMF', () => {
+  it('writes strokes to EMF as filled outlines', () => {
     const types = emfRecords(svgToEmf(SVG, 32)).map((r) => r.type);
-    expect(types).toContain(95); // EXTCREATEPEN
-    expect(types).toContain(64); // STROKEPATH
-    expect(types).toContain(62); // FILLPATH for the active part
+    expect(types.filter((t) => t === 8)).toHaveLength(2); // POLYPOLYGON for the line and the part
+    expect(types).not.toContain(95); // no pens
     expect(types.at(-1)).toBe(14);
   });
 
