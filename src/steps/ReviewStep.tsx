@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { StepHeader } from '../components/StepHeader';
 import { Icon } from '../components/icons';
 import { Badge, Button, Card, CardHeader, Dialog, Segmented, SvgView, TextField, cx } from '../components/ui';
 import { formatUsd, getModel } from '../lib/models';
 import { editIcon, generateIcons, iconVariations, retraceAll, type ProcessedCell } from '../lib/pipeline';
+import { CHECK_FIX, CHECK_TEXT, checkSet, type CheckId } from '../lib/quality';
 import { fileName } from '../lib/svg';
 import type { IconItem, Project } from '../lib/types';
 import { errorText, useStore } from '../store';
@@ -47,6 +48,8 @@ export function ReviewStep({ onNext }: { onNext: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const selected = icons.find((i) => i.id === sel) ?? icons[0];
   const approved = icons.filter((i) => i.status === 'approved').length;
+  const checks = useMemo(() => checkSet(icons, project.style), [icons, project.style]);
+  const noted = Object.keys(checks).length;
   const model = getModel(project.modelId);
   const each = model.estimate[model.quality ? project.quality : 'low'];
 
@@ -118,7 +121,7 @@ export function ReviewStep({ onNext }: { onNext: () => void }) {
         <Card className="p-5 sm:p-6">
           <CardHeader
             title={project.brand.name ? `${project.brand.name} icons` : 'Your icons'}
-            detail={`${icons.length} icons · ${approved} approved`}
+            detail={`${icons.length} icons · ${approved} approved${noted ? ` · ${noted} with notes` : ''}`}
             action={
               <div className="flex gap-2 flex-wrap justify-end">
                 <Segmented size="sm" label="Preview size" value={size} onChange={setSize} options={[{ value: 24, label: '24' }, { value: 48, label: '48' }]} />
@@ -134,7 +137,7 @@ export function ReviewStep({ onNext }: { onNext: () => void }) {
                   <button
                     type="button"
                     aria-pressed={on}
-                    aria-label={`${i.name}, ${i.status}`}
+                    aria-label={`${i.name}, ${i.status}${checks[i.id] ? ', has notes' : ''}`}
                     onClick={() => setSel(i.id)}
                     className={cx(
                       'relative w-full aspect-square rounded-[16px] flex flex-col items-center justify-center gap-2 cursor-pointer transition-all',
@@ -153,6 +156,7 @@ export function ReviewStep({ onNext }: { onNext: () => void }) {
                     ) : i.status === 'flagged' ? (
                       <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 rounded-full bg-warning" />
                     ) : null}
+                    {checks[i.id] ? <span title={checks[i.id].map((c) => CHECK_TEXT[c]).join(' ')} className="absolute top-2.5 left-2.5 w-2 h-2 rounded-full bg-accent/70" /> : null}
                   </button>
                 </li>
               );
@@ -179,7 +183,7 @@ export function ReviewStep({ onNext }: { onNext: () => void }) {
           </div>
         </Card>
 
-        {selected ? <Inspector key={selected.id} icon={selected} project={project} each={each} setStatus={setStatus} download={download} /> : null}
+        {selected ? <Inspector key={selected.id} icon={selected} project={project} each={each} setStatus={setStatus} download={download} notes={checks[selected.id] ?? []} /> : null}
       </div>
 
       <Dialog open={adding} onClose={() => setAdding(false)} title="Add icons to the set">
@@ -204,12 +208,14 @@ function Inspector({
   each,
   setStatus,
   download,
+  notes,
 }: {
   icon: IconItem;
   project: Project;
   each: number;
   setStatus: (id: string, s: IconItem['status']) => void;
   download: (name: string, text: string, type: string) => void;
+  notes: CheckId[];
 }) {
   const { update, deps, notify } = useStore();
   const [instruction, setInstruction] = useState('');
@@ -302,6 +308,27 @@ function Inspector({
             </li>
           ))}
         </ul>
+      ) : null}
+
+      {notes.length ? (
+        <section aria-label="Set checks" className="rounded-[14px] bg-accent-soft px-4 py-3 text-[13px] flex flex-col gap-2">
+          {notes.map((c) => (
+            <div key={c} className="flex gap-2 items-start">
+              <Icon name="info" size={15} className="text-accent shrink-0 mt-px" />
+              <span className="flex-1">
+                {CHECK_TEXT[c]}
+                {CHECK_FIX[c] ? (
+                  <>
+                    {' '}
+                    <button type="button" className="text-accent font-medium cursor-pointer hover:underline" onClick={() => setInstruction(CHECK_FIX[c]!)}>
+                      Suggest a fix
+                    </button>
+                  </>
+                ) : null}
+              </span>
+            </div>
+          ))}
+        </section>
       ) : null}
 
       <div className="flex flex-col gap-2.5">

@@ -2,18 +2,65 @@ import JSZip from 'jszip';
 import { svgToEmf } from './emf';
 import { indicatorFiles, INDICATOR_KINDS, type IndicatorKind } from './indicators';
 import { BUTTON_STATES, buttonState, glyph, labviewGuide, STATUS, statusVariant, viIcon } from './labview';
-import { snapSvg } from './paths';
+import { opticalSvg, snapSvg, WEIGHTS } from './paths';
 import { styleLock } from './prompts';
 import { componentName, figmaSheet, fileName, reactComponent, sprite, uniqueNames, withCurrentColor, withTitle } from './svg';
-import type { ExportOptions, IconItem, Project } from './types';
+import type { ExportOptions, ExportTarget, IconItem, Project } from './types';
 
 export const PNG_SIZES = [16, 24, 32, 48, 64, 128, 256, 512];
 export const PNG_SCALES = [1, 1.5, 2];
 export const BUTTON_SIZES = [32, 48, 64];
-/** Pixel size of status-variant PNGs. */
+/** Pixel size of status-variant PNGs when plain PNG export is off. */
 export const STATE_SIZE = 48;
 /** Largest PNG that gets pixel-grid snapping; above this, anti-aliasing already looks sharp. */
 const SNAP_MAX = 64;
+
+type FormatKeys = 'svg' | 'png' | 'react' | 'sprite' | 'figma' | 'emf' | 'buttons' | 'viIcons' | 'states' | 'indicators';
+
+export const TARGETS: { id: ExportTarget; label: string; hint: string; files: Partial<Record<FormatKeys, true>> & { pngSizes?: number[]; pngScales?: number[] } }[] = [
+  { id: 'web', label: 'Web & apps', hint: 'SVG, React components and PNGs', files: { svg: true, react: true, png: true, pngSizes: [24, 48] } },
+  { id: 'design', label: 'Design tools', hint: 'Figma layers and large PNGs', files: { svg: true, figma: true, png: true, pngSizes: [512] } },
+  { id: 'labview', label: 'LabVIEW', hint: 'Button states, VI icons, EMF and @2x PNGs', files: { png: true, emf: true, buttons: true, viIcons: true, pngSizes: [16, 32], pngScales: [1, 2] } },
+  { id: 'hmi', label: 'HMI / SCADA', hint: 'Equipment states, alarm badges and indicators', files: { svg: true, png: true, states: true, indicators: true, pngSizes: [24, 48] } },
+];
+
+/**
+ * The formats for a set of targets: everything any of them needs, nothing else. Settings that
+ * aren't about which files to make (names, colours, banner, skins) are kept as they are.
+ */
+export function applyTargets(o: ExportOptions, targets: ExportTarget[]): ExportOptions {
+  const picked = TARGETS.filter((t) => targets.includes(t.id));
+  const on = (k: FormatKeys) => picked.some((t) => t.files[k]);
+  const sizes = [...new Set(picked.flatMap((t) => t.files.pngSizes ?? []))].sort((a, b) => a - b);
+  const scales = [...new Set([1, ...picked.flatMap((t) => t.files.pngScales ?? [])])].sort((a, b) => a - b);
+  return {
+    ...o,
+    targets,
+    svg: on('svg') || !picked.length,
+    png: on('png'),
+    react: on('react'),
+    sprite: on('sprite'),
+    figma: on('figma'),
+    emf: on('emf'),
+    buttons: on('buttons'),
+    viIcons: on('viIcons'),
+    states: on('states'),
+    indicators: on('indicators'),
+    pngSizes: sizes.length ? sizes : o.pngSizes,
+    pngScales: scales,
+  };
+}
+
+/** An icon as it will be drawn at `px` pixels: the set's line weight, optical sizing and snapping. */
+export function iconAt(project: Project, o: ExportOptions, svg: string, px = 24): string {
+  const weighted = opticalSvg(svg, px, WEIGHTS[project.style.weight ?? 'regular']);
+  return o.pixelSnap && project.style.style !== 'pixel' && px <= SNAP_MAX ? snapSvg(weighted, px) : weighted;
+}
+
+/** Button drawing options from the export settings. */
+export function buttonOptions(project: Project, o: ExportOptions) {
+  return { skin: o.buttonSkin, shape: o.buttonShape, primary: project.style.primary, stateColor: o.stateColor || undefined };
+}
 
 export function exportable(icons: IconItem[]): IconItem[] {
   return icons.filter((i) => i.svg);
@@ -48,37 +95,45 @@ export function exportEntries(project: Project, o: ExportOptions, rasterize: Ras
   const files = uniqueNames(names, (n) => fileName(n, o.naming, o.prefix));
   const comps = uniqueNames(names, componentName, '');
   const scales = [1, ...o.pngScales.filter((s) => s !== 1)].sort((a, b) => a - b);
-  const png = (svg: () => string, px: number) => () => rasterize(o.pixelSnap && px <= SNAP_MAX ? snapSvg(svg(), px) : svg(), px);
+  const pixelArt = project.style.style === 'pixel';
+  // Pixel art is already on an exact grid; snapping it to another would distort it.
+  const png = (svg: () => string, px: number) => () => rasterize(o.pixelSnap && !pixelArt && px <= SNAP_MAX ? snapSvg(svg(), px) : svg(), px);
   const out: Entry[] = [];
+  const weight = WEIGHTS[project.style.weight ?? 'regular'];
+  /** The icon with the set's line weight, and optical line widths when drawn at `px` pixels. */
+  const drawn = (icon: IconItem, px = 24) => opticalSvg(icon.svg!, px, weight);
+  // HMI screens show equipment at 24–64 px; smaller sizes can't carry a badge.
+  const stateSizes = o.png ? o.pngSizes.filter((s) => s >= 24 && s <= 64) : [];
+  const buttonOpts = buttonOptions(project, o);
   /** PNG at each selected density, e.g. cart.png, cart@2x.png. */
   const pngs = (base: string, svg: () => string, size: number) =>
     scales.forEach((s) => out.push({ path: `${base}${scaleSuffix(s)}.png`, data: png(svg, Math.round(size * s)) }));
 
-  if (o.svg) icons.forEach((icon, k) => out.push({ path: `svg/${files[k]}.svg`, data: () => withTitle(icon.svg!, icon.name) + '\n' }));
-  if (o.png) o.pngSizes.forEach((size) => icons.forEach((icon, k) => pngs(`png/${size}/${files[k]}`, () => icon.svg!, size)));
-  if (o.emf) icons.forEach((icon, k) => out.push({ path: `emf/${files[k]}.emf`, data: () => svgToEmf(icon.svg!, 32) }));
+  if (o.svg) icons.forEach((icon, k) => out.push({ path: `svg/${files[k]}.svg`, data: () => withTitle(drawn(icon), icon.name) + '\n' }));
+  if (o.png) o.pngSizes.forEach((size) => icons.forEach((icon, k) => pngs(`png/${size}/${files[k]}`, () => drawn(icon, size), size)));
+  if (o.emf) icons.forEach((icon, k) => out.push({ path: `emf/${files[k]}.emf`, data: () => svgToEmf(drawn(icon), 32) }));
   if (o.react) {
-    comps.forEach((c, k) => out.push({ path: `react/${c}.tsx`, data: () => reactComponent(c, icons[k].svg!) }));
+    comps.forEach((c, k) => out.push({ path: `react/${c}.tsx`, data: () => reactComponent(c, drawn(icons[k])) }));
     out.push({ path: 'react/index.ts', data: () => comps.map((c) => `export { ${c} } from './${c}';`).join('\n') + '\n' });
   }
-  if (o.sprite) out.push({ path: 'sprite.svg', data: () => sprite(icons.map((i, k) => ({ id: files[k], svg: withCurrentColor(i.svg!) }))) });
-  if (o.figma) out.push({ path: 'figma/icons.svg', data: () => figmaSheet(icons.map((i, k) => ({ id: files[k], svg: i.svg! }))) });
+  if (o.sprite) out.push({ path: 'sprite.svg', data: () => sprite(icons.map((i, k) => ({ id: files[k], svg: withCurrentColor(drawn(i)) }))) });
+  if (o.figma) out.push({ path: 'figma/icons.svg', data: () => figmaSheet(icons.map((i, k) => ({ id: files[k], svg: drawn(i) }))) });
 
   if (o.states) {
+    const onColor = o.stateColor || undefined;
     for (const s of STATUS) {
       icons.forEach((icon, k) => {
-        const svg = lazy(() => statusVariant(icon.svg!, s.id));
-        const base = `states/${s.id}/${files[k]}`;
-        out.push({ path: `${base}.svg`, data: () => svg() + '\n' });
-        pngs(base, svg, STATE_SIZE);
-        if (o.emf) out.push({ path: `${base}.emf`, data: () => svgToEmf(svg(), STATE_SIZE) });
+        const base = `states/${s.id}`;
+        out.push({ path: `${base}/${files[k]}.svg`, data: () => statusVariant(drawn(icon), s.id, { onColor }) + '\n' });
+        for (const size of stateSizes.length ? stateSizes : [STATE_SIZE]) pngs(`${base}/${size}/${files[k]}`, () => statusVariant(drawn(icon, size), s.id, { onColor }), size);
+        if (o.emf) out.push({ path: `${base}/${files[k]}.emf`, data: () => svgToEmf(statusVariant(drawn(icon), s.id, { onColor }), STATE_SIZE) });
       });
     }
   }
   if (o.buttons) {
     icons.forEach((icon, k) => {
       for (const state of BUTTON_STATES) {
-        const svg = lazy(() => buttonState(icon.svg!, state, project.style.primary));
+        const svg = lazy(() => buttonState(drawn(icon), state, buttonOpts));
         const base = `labview/buttons/${files[k]}/${state}`;
         pngs(base, svg, o.buttonSize);
         if (o.emf) out.push({ path: `${base}.emf`, data: () => svgToEmf(svg(), o.buttonSize) });
@@ -86,10 +141,10 @@ export function exportEntries(project: Project, o: ExportOptions, rasterize: Ras
     });
   }
   if (o.viIcons) {
-    const banner = { banner: o.bannerText, bannerColor: o.bannerColor || undefined };
+    const banner = { banner: o.bannerText, bannerColor: o.bannerColor || undefined, pixel: pixelArt };
     icons.forEach((icon, k) => {
-      out.push({ path: `labview/vi-icons/${files[k]}.png`, data: png(() => viIcon(icon.svg!, banner), 32) });
-      out.push({ path: `labview/glyphs/${files[k]}.png`, data: png(() => glyph(icon.svg!), 32) });
+      out.push({ path: `labview/vi-icons/${files[k]}.png`, data: png(() => viIcon(drawn(icon, 20), banner), 32) });
+      out.push({ path: `labview/glyphs/${files[k]}.png`, data: png(() => glyph(drawn(icon, 28), pixelArt), 32) });
     });
   }
   if (o.indicators) {

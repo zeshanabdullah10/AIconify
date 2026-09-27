@@ -41,10 +41,20 @@ for (const scheme of ['light', 'dark'] as const) {
     await page.getByRole('button', { name: 'Export' }).click();
     await page.waitForTimeout(500);
     await page.screenshot({ path: `${dir}/5-export.png`, fullPage: true });
-    for (const name of [/^EMF/, /^Button states/, /^VI icons/, /^Status variants/, /^Indicators/]) await page.getByRole('switch', { name }).click();
+    await page.getByRole('button', { name: /^LabVIEW/ }).click();
+    await page.getByRole('button', { name: /^HMI \/ SCADA/ }).click();
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: `${dir}/5b-export-labview.png`, fullPage: true });
+    const place = page.locator('[aria-label="See it in place"]');
+    for (const [tab, file] of [['HMI screen', '5c-hmi'], ['Web', '5d-web'], ['Sizes', '5e-sizes']]) {
+      await place.getByRole('radio', { name: tab }).click();
+      await page.waitForTimeout(300);
+      await place.screenshot({ path: `${dir}/${file}.png` });
+    }
+    await page.getByRole('button', { name: 'Customize files' }).click();
     await page.getByLabel(/^Banner text/).fill('DAQ');
     await page.getByRole('group', { name: 'Indicator kinds' }).getByRole('button', { name: 'Tank level' }).click();
     await page.waitForTimeout(500);
-    await page.screenshot({ path: `${dir}/5b-export-labview.png`, fullPage: true });
+    await page.screenshot({ path: `${dir}/5f-export-custom.png`, fullPage: true });
   });
 }

@@ -31,6 +31,7 @@ export function defaultProject(): Project {
     quality: 'low',
     candidates: 2,
     exportOptions: {
+      targets: ['web', 'design'],
       svg: true,
       png: true,
       pngSizes: [24, 48, 512],
@@ -44,6 +45,9 @@ export function defaultProject(): Project {
       emf: false,
       buttons: false,
       buttonSize: 48,
+      buttonSkin: 'isa',
+      buttonShape: 'square',
+      stateColor: '',
       viIcons: false,
       bannerText: '',
       bannerColor: '',

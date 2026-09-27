@@ -1,6 +1,6 @@
 import { emfRecords, svgToEmf } from './emf';
 import { indicatorFiles, TANK_LEVELS } from './indicators';
-import { BUTTON_STATES, bannerText, buttonState, glyph, statusVariant, viIcon } from './labview';
+import { BUTTON_SKINS, BUTTON_STATES, bannerText, buttonBox, buttonState, glyph, statusVariant, viIcon } from './labview';
 import { ellipseD, parseD, parseSvg, snapD, transformD } from './paths';
 
 const ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#1f4d3a" d="M2.3 2.2L21.6 2.4L21.7 21.8Q12 23 2.1 21.7Z"/></svg>';
@@ -59,26 +59,75 @@ describe('paths', () => {
 });
 
 describe('button states', () => {
-  it('draws four distinct states, recolouring the glyph when the button is on', () => {
-    const svgs = BUTTON_STATES.map((s) => buttonState(ICON, s, '#1f4d3a'));
-    expect(new Set(svgs).size).toBe(4);
-    for (const svg of svgs) expect(svg).toContain('viewBox="0 0 48 48"');
-    // off: brand-coloured glyph on a light face; on: white glyph on a brand face
-    expect(parseSvg(svgs[0]).paths.at(-1)!.fill).toBe('#1f4d3a');
-    expect(parseSvg(svgs[1]).paths[1].fill).toBe('#1f4d3a');
-    expect(parseSvg(svgs[1]).paths.at(-1)!.fill).toBe('#ffffff');
+  const PART = ICON.replace('</svg>', '<path class="active" fill="#6bbf59" d="M8 8L16 8L16 16L8 16Z"/></svg>');
+  const active = (svg: string) => parseSvg(svg).paths.filter((p) => p.part === 'active').map((p) => p.fill);
+  const body = (svg: string) => parseSvg(svg).paths.find((p) => p.d.startsWith('M'))!;
+
+  it('draws four distinct states in every skin and shape', () => {
+    for (const skin of BUTTON_SKINS.map((k) => k.id))
+      for (const shape of ['square', 'wide'] as const) {
+        const svgs = BUTTON_STATES.map((st) => buttonState(PART, st, { skin, shape, primary: '#1f4d3a' }));
+        expect(new Set(svgs).size, `${skin} ${shape}`).toBe(4);
+        const [w, h] = buttonBox(shape);
+        for (const svg of svgs) expect(svg).toContain(`viewBox="0 0 ${w} ${h}"`);
+      }
+  });
+
+  it('lights only the active part when true, not the whole glyph', () => {
+    const o = { skin: 'isa' as const, primary: '#1f4d3a', stateColor: '#2fb344' };
+    const off = buttonState(PART, 'false', o);
+    const on = buttonState(PART, 'true', o);
+    expect(active(off)).toEqual(['#aeaeb2']);
+    expect(active(on)).toEqual(['#2fb344']);
+    // The icon body keeps the same dark grey in both states.
+    const glyphBody = (svg: string) => parseSvg(svg).paths.filter((p) => p.fill === '#3a3a3c').length;
+    expect(glyphBody(off)).toBe(1);
+    expect(glyphBody(on)).toBe(1);
+    // The state bar is the last shape: grey off, state colour on.
+    expect(parseSvg(off).paths.at(-1)!.fill).toBe('#b8b8bc');
+    expect(parseSvg(on).paths.at(-1)!.fill).toBe('#2fb344');
+    expect(body(on).fill).toBe('#8e8e93');
+  });
+
+  it('colours the whole glyph when the icon has no active part (modern skin)', () => {
+    const on = buttonState(ICON, 'true', { skin: 'flat', primary: '#1f4d3a', stateColor: '#0071e3' });
+    expect(parseSvg(on).paths.at(-1)!.fill).toBe('#0071e3');
   });
 
   it('never puts an unvalidated colour into the markup', () => {
-    expect(buttonState(ICON, 'true', '"/><script>alert(1)</script>')).not.toContain('script');
+    const bad = '"/><script>alert(1)</script>';
+    for (const skin of BUTTON_SKINS.map((k) => k.id)) expect(buttonState(ICON, 'true', { skin, primary: bad, stateColor: bad })).not.toContain('script');
   });
 });
 
 describe('status variants', () => {
-  it('keeps the icon for normal and recolours the rest', () => {
-    expect(parseSvg(statusVariant(DUO, 'normal')).paths.map((p) => p.fill)).toEqual(['#1f4d3a', '#6bbf59']);
-    expect(new Set(parseSvg(statusVariant(DUO, 'alarm')).paths.map((p) => p.fill))).toEqual(new Set(['#d62d20']));
-    // offline adds a slash so it doesn't rely on colour alone
+  const PART = DUO.replace('<path fill="#6bbf59"', '<path class="active" fill="#6bbf59"');
+  const fills = (svg: string) => parseSvg(svg).paths.map((p) => p.fill);
+
+  it('keeps the icon calm and changes only the active part for on and off', () => {
+    expect(fills(statusVariant(PART, 'normal'))).toEqual(['#1f4d3a', '#1f4d3a']);
+    expect(fills(statusVariant(PART, 'on', { onColor: '#2fb344' }))).toEqual(['#1f4d3a', '#2fb344']);
+    expect(fills(statusVariant(PART, 'off'))).toEqual(['#1f4d3a', '#c7c7cc']);
+    // Without an active part, "on" adds a lit dot instead of repainting the icon.
+    const on = fills(statusVariant(ICON, 'on', { onColor: '#2fb344' }));
+    expect(on[0]).toBe('#1f4d3a');
+    expect(on).toContain('#2fb344');
+  });
+
+  it('adds shape-coded badges for warning, alarm and manual without repainting the icon', () => {
+    for (const [status, color] of [['warning', '#e8a200'], ['alarm', '#d62d20'], ['manual', '#2f6fd6']] as const) {
+      const f = fills(statusVariant(PART, status));
+      expect(f.slice(0, 2)).toEqual(['#1f4d3a', '#6bbf59']);
+      expect(f).toContain(color);
+    }
+    // Warning is a triangle (3 corners), alarm a diamond (4).
+    const corners = (status: 'warning' | 'alarm') => parseD(parseSvg(statusVariant(ICON, status)).paths[2].d).filter((s) => s.c !== 'Z').length;
+    expect(corners('warning')).toBe(3);
+    expect(corners('alarm')).toBe(4);
+  });
+
+  it('greys out disabled and offline, with a slash for offline', () => {
+    expect(new Set(fills(statusVariant(PART, 'disabled'))).has('#1f4d3a')).toBe(false);
     expect(parseSvg(statusVariant(ICON, 'offline')).paths.length).toBeGreaterThan(parseSvg(ICON).paths.length);
   });
 });

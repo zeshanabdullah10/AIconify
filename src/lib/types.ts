@@ -23,7 +23,7 @@ export interface BrandKit {
   analyzed: boolean;
 }
 
-export type IconStyle = 'outline' | 'filled' | 'duotone' | 'badge';
+export type IconStyle = 'outline' | 'filled' | 'duotone' | 'badge' | 'schematic' | 'pixel';
 export type Corners = 'rounded' | 'sharp';
 export type ColorMode = 'mono' | 'brand';
 export type Quality = 'low' | 'medium';
@@ -37,6 +37,13 @@ export interface StyleLock {
   accent: string;
   /** Industrial HMI look (ISA-101): muted, functional symbols; colour only for alarms. */
   hmi?: boolean;
+  /**
+   * Ask for the part that changes with state (impeller, valve disc, lamp glow) in a reserved key
+   * colour, so it is traced as its own `active` layer that states and buttons can recolour.
+   */
+  parts?: boolean;
+  /** Line weight for stroked (centerline) icons; filled icons are unaffected. */
+  weight?: 'light' | 'regular' | 'bold';
 }
 
 export type IconStatus = 'draft' | 'flagged' | 'approved';
@@ -80,7 +87,11 @@ export interface SheetRun {
   createdAt: number;
 }
 
+export type ExportTarget = 'web' | 'design' | 'labview' | 'hmi';
+
 export interface ExportOptions {
+  /** Where the set will be used; picking targets sets sensible defaults for everything below. */
+  targets: ExportTarget[];
   svg: boolean;
   png: boolean;
   pngSizes: number[];
@@ -96,6 +107,10 @@ export interface ExportOptions {
   emf: boolean;
   buttons: boolean;
   buttonSize: number;
+  buttonSkin: 'isa' | 'flat' | 'classic' | 'toggle';
+  buttonShape: 'square' | 'wide';
+  /** Colour for "true" and "on" in buttons and states; '' uses each skin's default. */
+  stateColor: string;
   viIcons: boolean;
   bannerText: string;
   bannerColor: string;

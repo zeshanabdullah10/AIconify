@@ -1,4 +1,4 @@
-import { iconName, parseBrand, parseBrief, parseJson, parseSuggestions, sheetPrompt, styleLock } from './prompts';
+import { activeColor, iconName, parseBrand, parseBrief, parseJson, parseSuggestions, partKey, sheetPrompt, styleLock } from './prompts';
 import type { BrandKit, StyleLock } from './types';
 
 const brand: BrandKit = {
@@ -85,3 +85,22 @@ describe('parsers', () => {
     expect(parseSuggestions('{"icons":["home","Map"]}', ['Home'])).toEqual(['Map']);
   });
 });
+
+describe('state parts', () => {
+  const base: StyleLock = { style: 'outline', strokeWeight: 2, corners: 'rounded', colorMode: 'brand', primary: '#1f4d3a', accent: '#6bbf59' };
+
+  it('asks for the state part in a key colour far from the brand colours', () => {
+    expect(partKey(base)).toBeUndefined();
+    expect(styleLock(base, brand)).not.toContain('State part');
+    const key = partKey({ ...base, parts: true })!;
+    expect(styleLock({ ...base, parts: true }, brand)).toContain(`draw only that part in exactly ${key}`);
+    // A magenta brand gets a different key.
+    expect(partKey({ ...base, parts: true, primary: '#ff10f0', accent: '#e000ff' })).not.toBe('#ff00ff');
+  });
+
+  it('shows active parts in the accent in brand mode, and the main colour in one-colour mode', () => {
+    expect(activeColor(base)).toBe('#6bbf59');
+    expect(activeColor({ ...base, colorMode: 'mono' })).toBe('#1f4d3a');
+  });
+});
+

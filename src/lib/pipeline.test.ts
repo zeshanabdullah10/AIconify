@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
 import { GREEN, fillRect, makeSheet, nodeCodec, toPngDataUrl } from '../test/fixtures';
-import { buildZip, planFiles } from './exporter';
+import { applyTargets, buildZip, planFiles } from './exporter';
 import { emfRecords } from './emf';
 import type { Client, ImageRequest } from './openrouter';
 import { analyzeBrand, editIcon, generateIcons, iconPalette, iconVariations, retraceAll, type Deps } from './pipeline';
@@ -217,7 +217,9 @@ describe('LabVIEW and industrial export', () => {
         'labview/vi-icons/pump.png',
         'labview/glyphs/pump.png',
         'states/alarm/pump.svg',
-        'states/offline/pump.png',
+        'states/offline/24/pump.png',
+        'states/on/pump.svg',
+        'states/manual/24/pump@2x.png',
         'labview/indicators/round-led-green-on.png',
         'labview/indicators/tank-green-050.svg',
         'labview/README.md',
@@ -273,5 +275,20 @@ describe('reference icons', () => {
     const p = project();
     await generateIcons({ client, codec: nodeCodec, onCost: () => {} }, { ...p, style: { ...p.style, hmi: true } }, ['Pump']);
     expect(calls.images[0].prompt).toContain('ISA-101');
+  });
+});
+
+describe('export targets', () => {
+  it('match the defaults for web + design, and combine', () => {
+    const d = defaultProject().exportOptions;
+    expect(applyTargets(d, ['web', 'design'])).toEqual(d);
+    const lv = applyTargets(d, ['labview']);
+    expect(lv).toMatchObject({ png: true, emf: true, buttons: true, viIcons: true, svg: false, react: false, states: false, pngSizes: [16, 32], pngScales: [1, 2] });
+    const both = applyTargets(d, ['labview', 'hmi']);
+    expect(both).toMatchObject({ buttons: true, states: true, indicators: true, svg: true, pngSizes: [16, 24, 32, 48] });
+    // Settings that aren't about which files to make survive.
+    expect(applyTargets({ ...d, prefix: 'fl-', buttonSkin: 'toggle' }, ['hmi'])).toMatchObject({ prefix: 'fl-', buttonSkin: 'toggle' });
+    // Nothing picked still exports SVG.
+    expect(applyTargets(d, []).svg).toBe(true);
   });
 });

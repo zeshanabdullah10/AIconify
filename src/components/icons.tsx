@@ -24,6 +24,7 @@ const PATHS = {
   moon: 'M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z',
   external: 'M14 4h6v6M20 4l-9 9M18 14v6H4V6h6',
   chevronDown: 'M6 9l6 6 6-6',
+  info: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 11v5M12 8h.01',
 } as const;
 
 export type IconName = keyof typeof PATHS;

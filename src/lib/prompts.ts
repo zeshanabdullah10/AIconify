@@ -1,4 +1,4 @@
-import { isHex, normalizeHex } from './color';
+import { hexToRgb, isHex, normalizeHex } from './color';
 import type { ChatMessage } from './openrouter';
 import type { BrandKit, IconStyle, PaletteColor, StyleLock } from './types';
 
@@ -7,6 +7,8 @@ export const STYLE_LABELS: Record<IconStyle, { name: string; hint: string }> = {
   filled: { name: 'Filled', hint: 'Solid shapes' },
   duotone: { name: 'Duotone', hint: 'Line + accent fill' },
   badge: { name: 'Badge', hint: 'Icon on a tile' },
+  schematic: { name: 'Schematic', hint: 'P&ID line symbols' },
+  pixel: { name: 'Pixel', hint: '32×32 pixel art' },
 };
 
 function styleSentence(s: StyleLock): string {
@@ -20,21 +22,49 @@ function styleSentence(s: StyleLock): string {
       return `duotone icons: a uniform ${s.strokeWeight}px outline in ${s.primary} with a flat secondary fill in ${s.accent} behind parts of each shape, ${corners}`;
     case 'badge':
       return `icons drawn as simple white line art (${s.strokeWeight}px strokes) centered on a solid ${s.primary} rounded-square tile, ${corners}`;
+    case 'schematic':
+      return `engineering schematic symbols in the style of ISA-5.1 P&ID and IEC process diagrams: thin uniform ${s.strokeWeight}px lines on a 24px grid, built from geometric primitives (circles, triangles, rectangles, straight connecting lines), flat and front-on, no perspective, no shading, instrument bubbles as plain circles, like a clean CAD drawing`;
+    case 'pixel':
+      return `pixel-art icons drawn on a 32×32 pixel grid with large, clearly visible square pixels, hard edges and no anti-aliasing, a 1-pixel dark outline, flat colours, in the tradition of classic desktop and LabVIEW VI icons`;
   }
+}
+
+/** Saturated colours no brand icon uses; the one furthest from the set's colours marks active parts. */
+const PART_KEYS = ['#ff00ff', '#00d0ff', '#ff7a00', '#7a00ff'];
+
+/** The key colour for active parts, or undefined when parts are off. */
+export function partKey(s: StyleLock): string | undefined {
+  if (!s.parts) return undefined;
+  const used = [s.primary, s.accent, '#ffffff'].filter(isHex).map(hexToRgb);
+  const gap = (hex: string) => {
+    const c = hexToRgb(hex);
+    return Math.min(...used.map((u) => (u.r - c.r) ** 2 + (u.g - c.g) ** 2 + (u.b - c.b) ** 2));
+  };
+  return PART_KEYS.reduce((best, k) => (gap(k) > gap(best) ? k : best));
+}
+
+/** The colour active parts are shown in on the plain icon: the accent in brand mode. */
+export function activeColor(s: StyleLock): string {
+  if (s.colorMode === 'brand') return s.accent;
+  return s.style === 'badge' ? '#ffffff' : s.primary;
 }
 
 /** The fixed style block that goes into every image prompt for a set — the main consistency lever. */
 export function styleLock(s: StyleLock, brand: BrandKit): string {
   const colors =
-    s.colorMode === 'mono' || s.style === 'outline' || s.style === 'filled'
+    s.colorMode === 'mono' || s.style === 'outline' || s.style === 'filled' || s.style === 'schematic'
       ? `Use exactly one colour: ${s.primary}.`
-      : `Use only ${s.primary} and ${s.accent}${s.style === 'badge' ? ' plus white' : ''}.`;
+      : `Use only ${s.primary} and ${s.accent}${s.style === 'badge' || s.style === 'pixel' ? ' plus white' : ''}.`;
   const mood = brand.traits.length ? ` Mood: ${brand.traits.slice(0, 5).join(', ').toLowerCase()}.` : '';
   const dont = brand.donts.length ? ` Avoid: ${brand.donts.slice(0, 4).join('; ').toLowerCase()}.` : '';
   const hmi = s.hmi
     ? ' Industrial HMI symbols in the ISA-101 high-performance style: functional, schematic and technical, like equipment on a control-room screen; readable at 16 px; no decoration, no people, no mascots.'
     : '';
-  return `Style: ${styleSentence(s)}. Flat vector look, no gradients, no shadows, no 3D, no textures. ${colors}${hmi}${mood}${dont}`;
+  const key = partKey(s);
+  const parts = key
+    ? ` State part: where an icon has one part that moves, flows, glows or shows state (a pump's impeller, a valve's disc, a fan's blades, the liquid in a tank, a lamp's light, a lock's shackle), draw only that part in exactly ${key}, flat, in the same line style. Icons without such a part do not use ${key}.`
+    : '';
+  return `Style: ${styleSentence(s)}. Flat vector look, no gradients, no shadows, no 3D, no textures. ${colors}${parts}${hmi}${mood}${dont}`;
 }
 
 export interface SheetSpec {

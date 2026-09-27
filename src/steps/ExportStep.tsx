@@ -3,12 +3,13 @@ import { StepHeader } from '../components/StepHeader';
 import { Icon } from '../components/icons';
 import { Button, Card, CardHeader, Segmented, SvgView, Switch, TextField, cx } from '../components/ui';
 import { isHex, normalizeHex } from '../lib/color';
-import { BUTTON_SIZES, buildZip, exportable, planFiles, PNG_SCALES, PNG_SIZES } from '../lib/exporter';
+import { applyTargets, BUTTON_SIZES, buildZip, buttonOptions, exportable, iconAt, planFiles, PNG_SCALES, PNG_SIZES, TARGETS } from '../lib/exporter';
 import { indicatorFiles, INDICATOR_KINDS, SIGNAL_COLORS, type IndicatorKind } from '../lib/indicators';
-import { BANNER_MAX, BUTTON_STATE_LABELS, BUTTON_STATES, bannerText, buttonState, STATUS, statusVariant, viIcon } from '../lib/labview';
+import { BANNER_MAX, BUTTON_SKINS, BUTTON_STATE_LABELS, BUTTON_STATES, bannerText, buttonBox, buttonState, STATUS, statusVariant, viIcon } from '../lib/labview';
 import { formatUsd } from '../lib/models';
 import { snapSvg } from '../lib/paths';
 import { fileName } from '../lib/svg';
+import { InPlace } from '../components/InPlace';
 import type { ExportOptions } from '../lib/types';
 import { errorText, useStore } from '../store';
 
@@ -16,13 +17,20 @@ export function ExportStep({ onReset }: { onReset: () => void }) {
   const { project, update, codec, notify } = useStore();
   const o = project.exportOptions;
   const [busy, setBusy] = useState(false);
+  const [custom, setCustom] = useState(false);
   const set = (patch: Partial<ExportOptions>) => update((p) => ({ ...p, exportOptions: { ...p.exportOptions, ...patch } }));
   const icons = exportable(project.icons);
   const unapproved = icons.filter((i) => i.status !== 'approved').length;
   const files = useMemo(() => planFiles(project, o), [project, o]);
   const zipName = `${fileName(project.brand.name || 'icons', 'kebab')}-icons.zip`;
   const sample = icons.find((i) => i.status === 'approved') ?? icons[0];
+  // States read best on an icon with a moving or glowing part.
+  const stateSample = icons.find((i) => i.svg?.includes('class="active"')) ?? sample;
   const palette = project.brand.palette.filter((c) => isHex(c.hex));
+  const bOpts = buttonOptions(project, o);
+  const [bw, bh] = buttonBox(o.buttonShape);
+  const stateColors = [{ role: 'Default', hex: '' }, ...SIGNAL_COLORS, ...palette.filter((c) => !SIGNAL_COLORS.some((x) => x.hex === c.hex))];
+  const glyphOf = (svg: string) => iconAt(project, o, svg);
 
   const run = async () => {
     setBusy(true);
@@ -44,9 +52,58 @@ export function ExportStep({ onReset }: { onReset: () => void }) {
 
   return (
     <>
-      <StepHeader eyebrow="Step 5 of 5" title="Take it everywhere." subtitle="Pick the formats your team uses. Everything comes in one zip, ready for code, design tools and LabVIEW." />
+      <StepHeader eyebrow="Step 5 of 5" title="Take it everywhere." subtitle="Say where the icons are going and the zip is set up for it: code, design tools, LabVIEW or an HMI." />
       <div className="grid lg:grid-cols-[1fr_400px] gap-5 items-start">
         <div className="flex flex-col gap-5 min-w-0">
+          <Card className="p-5 sm:p-6 flex flex-col gap-4" aria-label="Where will you use these?">
+            <CardHeader title="Where will you use these?" detail="Pick one or more. Every file can still be fine-tuned under Customize files." />
+            <div role="group" aria-label="Targets" className="grid sm:grid-cols-2 gap-3">
+              {TARGETS.map((t) => {
+                const on = o.targets.includes(t.id);
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => update((p) => ({ ...p, exportOptions: applyTargets(p.exportOptions, on ? p.exportOptions.targets.filter((x) => x !== t.id) : [...p.exportOptions.targets, t.id]) }))}
+                    className={cx(
+                      'text-left p-4 rounded-[16px] flex items-start gap-3 cursor-pointer transition-all',
+                      on ? 'bg-accent-soft shadow-[inset_0_0_0_2px_var(--color-accent)]' : 'bg-raised shadow-[inset_0_0_0_1px_var(--color-line)] hover:shadow-[inset_0_0_0_1px_var(--color-line-strong)]',
+                    )}
+                  >
+                    <span className={cx('mt-0.5 w-5 h-5 rounded-[6px] flex items-center justify-center shrink-0', on ? 'bg-accent text-white' : 'shadow-[inset_0_0_0_1.5px_var(--color-line-strong)]')}>
+                      {on ? <Icon name="check" size={13} strokeWidth={3} /> : null}
+                    </span>
+                    <span className="flex flex-col">
+                      <span className="text-[15px] font-semibold">{t.label}</span>
+                      <span className="text-[13px] text-ink-2">{t.hint}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </Card>
+
+          {icons.length ? (
+            <Card className="p-5 sm:p-6 flex flex-col gap-4" aria-label="See it in place">
+              <CardHeader title="See it in place" detail="Drawn by the same code that writes the zip." />
+              {/* Remount when targets change, so the preview opens on the most relevant view. */}
+              <InPlace key={o.targets.join()} project={project} o={o} />
+            </Card>
+          ) : null}
+
+          <button
+            type="button"
+            aria-expanded={custom}
+            onClick={() => setCustom((v) => !v)}
+            className="self-start inline-flex items-center gap-2 h-10 px-4 rounded-full bg-fill hover:bg-fill-2 text-[14px] font-medium cursor-pointer"
+          >
+            Customize files
+            <Icon name="chevronDown" size={16} className={cx('transition-transform', custom && 'rotate-180')} />
+          </button>
+
+          {custom ? (
+          <>
           <Card className="p-5 sm:p-6 flex flex-col gap-2">
             <CardHeader title="Formats" />
             <div className="divide-y divide-line -mt-2">
@@ -107,15 +164,52 @@ export function ExportStep({ onReset }: { onReset: () => void }) {
                 <Switch label="Button states" detail="False, True and both pressed pictures for a custom boolean" checked={o.buttons} onChange={(v) => set({ buttons: v })} />
                 {o.buttons ? (
                   <div className="flex flex-col gap-3 pt-2">
+                    <div role="radiogroup" aria-label="Button style" className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {BUTTON_SKINS.map((k) => {
+                        const on = o.buttonSkin === k.id;
+                        return (
+                          <button
+                            key={k.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={on}
+                            title={k.hint}
+                            onClick={() => set({ buttonSkin: k.id })}
+                            className={cx(
+                              'p-3 rounded-[14px] flex flex-col items-center gap-2 cursor-pointer text-[13px] transition-all',
+                              on ? 'bg-accent-soft shadow-[inset_0_0_0_2px_var(--color-accent)]' : 'bg-raised shadow-[inset_0_0_0_1px_var(--color-line)] hover:shadow-[inset_0_0_0_1px_var(--color-line-strong)]',
+                            )}
+                          >
+                            {sample?.svg ? (
+                              <span className="flex gap-1.5">
+                                {(['false', 'true'] as const).map((st) => (
+                                  <span key={st} className="w-9 h-9">
+                                    <SvgView svg={buttonState(glyphOf(sample.svg!), st, { ...bOpts, skin: k.id, shape: 'square' })} />
+                                  </span>
+                                ))}
+                              </span>
+                            ) : null}
+                            <span className="font-medium">{k.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[12px] text-ink-3 -mt-1">{BUTTON_SKINS.find((k) => k.id === o.buttonSkin)?.hint}. Only the part of the icon that moves or lights up changes colour.</p>
+                    <Row label="Shape">
+                      <Segmented size="sm" label="Button shape" value={o.buttonShape} onChange={(buttonShape) => set({ buttonShape })} options={[{ value: 'square', label: 'Square' }, { value: 'wide', label: 'Wide, for Boolean text' }]} />
+                    </Row>
                     <Row label="Size">
                       <Segmented size="sm" label="Button size" value={o.buttonSize} onChange={(buttonSize) => set({ buttonSize })} options={BUTTON_SIZES.map((s) => ({ value: s, label: `${s} px` }))} />
                     </Row>
+                    <Row label="True">
+                      <ColorChips label="State color" colors={stateColors} value={o.stateColor} onChange={(stateColor) => set({ stateColor })} />
+                    </Row>
                     {sample?.svg ? (
-                      <ul aria-label="Button state preview" className="grid grid-cols-4 gap-2 max-w-[360px]">
+                      <ul aria-label="Button state preview" className={cx('grid gap-2', o.buttonShape === 'wide' ? 'grid-cols-2 max-w-[360px]' : 'grid-cols-4 max-w-[360px]')}>
                         {BUTTON_STATES.map((st) => (
                           <li key={st} className="flex flex-col items-center gap-1.5 text-[11px] text-ink-2 text-center">
-                            <span className="w-12 h-12">
-                              <SvgView svg={buttonState(sample.svg!, st, project.style.primary)} label={`${sample.name}, ${BUTTON_STATE_LABELS[st]}`} />
+                            <span style={{ width: bw, height: bh }}>
+                              <SvgView svg={buttonState(glyphOf(sample.svg!), st, bOpts)} label={`${sample.name}, ${BUTTON_STATE_LABELS[st]}`} />
                             </span>
                             {BUTTON_STATE_LABELS[st]}
                           </li>
@@ -172,21 +266,26 @@ export function ExportStep({ onReset }: { onReset: () => void }) {
               <div className="pb-3">
                 <Switch
                   label="Status variants"
-                  detail="Normal, warning, alarm, disabled and offline versions of every icon (ISA-101 colors)"
+                  detail="On, off, warning, alarm, manual, disabled and offline versions of every icon, ISA-101 style"
                   checked={o.states}
                   onChange={(v) => set({ states: v })}
                 />
                 {o.states && sample?.svg ? (
-                  <ul aria-label="Status preview" className="grid grid-cols-5 gap-2 pt-2 max-w-[420px]">
-                    {STATUS.map((s) => (
-                      <li key={s.id} className="flex flex-col items-center gap-1.5 text-[11px] text-ink-2">
-                        <span className="w-12 h-12 p-2 rounded-[10px] bg-paper shadow-[inset_0_0_0_1px_var(--color-line)]">
-                          <SvgView svg={statusVariant(sample.svg!, s.id)} label={`${sample.name}, ${s.label}`} />
-                        </span>
-                        {s.label}
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="flex flex-col gap-3 pt-2">
+                    <ul aria-label="Status preview" className="grid grid-cols-4 sm:grid-cols-8 gap-2">
+                      {STATUS.map((s) => (
+                        <li key={s.id} className="flex flex-col items-center gap-1.5 text-[11px] text-ink-2">
+                          <span className="w-12 h-12 p-1.5 rounded-[10px] bg-paper shadow-[inset_0_0_0_1px_var(--color-line)]">
+                            <SvgView svg={statusVariant(glyphOf(stateSample!.svg!), s.id, { onColor: o.stateColor || undefined })} label={`${stateSample!.name}, ${s.label}`} />
+                          </span>
+                          {s.label}
+                        </li>
+                      ))}
+                    </ul>
+                    <Row label="On">
+                      <ColorChips label="On color" colors={stateColors} value={o.stateColor} onChange={(stateColor) => set({ stateColor })} />
+                    </Row>
+                  </div>
                 ) : null}
               </div>
               <div className="pt-3">
@@ -195,6 +294,8 @@ export function ExportStep({ onReset }: { onReset: () => void }) {
               </div>
             </div>
           </Card>
+          </>
+          ) : null}
         </div>
 
         <div className="flex flex-col gap-5 lg:sticky lg:top-20">

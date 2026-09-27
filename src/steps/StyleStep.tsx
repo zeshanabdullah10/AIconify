@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StepHeader, Swatch } from '../components/StepHeader';
 import { Icon } from '../components/icons';
-import { Button, Card, CardHeader, DropZone, Segmented, Spinner, cx } from '../components/ui';
+import { Button, Card, CardHeader, DropZone, Segmented, Spinner, Switch, cx } from '../components/ui';
 import { readFileAsDataUrl } from '../lib/codec';
 import { luminance } from '../lib/color';
 import { getModel } from '../lib/models';
 import { extractPalette } from '../lib/palette';
-import { MAX_PER_SHEET, suggestIcons, uid } from '../lib/pipeline';
+import { LINE_STYLES, MAX_PER_SHEET, suggestIcons, uid } from '../lib/pipeline';
+import { WEIGHTS } from '../lib/paths';
 import { ensureTransparent, fitSquare } from '../lib/raster';
 import { ICON_PACKS } from '../lib/presets';
 import { STYLE_LABELS, styleLock } from '../lib/prompts';
@@ -20,21 +21,54 @@ const SAMPLE = [
   'M3 11l9-7 9 7M5 10v10h14V10',
 ];
 
+// P&ID-style samples for the schematic preview: pump, gate valve, instrument bubble, vessel.
+const SCHEMATIC = [
+  'M12 5a7 7 0 1 0 0 14a7 7 0 1 0 0-14M12 5h8',
+  'M4 7v10l16-10v10z',
+  'M12 5a7 7 0 1 0 0 14a7 7 0 1 0 0-14M5 12h14',
+  'M8 4h8a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3z',
+];
+
+/** A sample drawn on a 16-pixel grid with hard edges, shown enlarged. */
+function PixelSample({ d, color, size }: { d: string; color: string; size: number }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const g = ref.current?.getContext('2d');
+    if (!g || typeof Path2D === 'undefined') return;
+    g.clearRect(0, 0, 16, 16);
+    g.setTransform(16 / 24, 0, 0, 16 / 24, 0, 0);
+    g.lineWidth = 2.6;
+    g.strokeStyle = color;
+    g.stroke(new Path2D(d));
+    // Hard pixels: every pixel either fully on or off.
+    const img = g.getImageData(0, 0, 16, 16);
+    for (let i = 3; i < img.data.length; i += 4) img.data[i] = img.data[i] > 100 ? 255 : 0;
+    g.putImageData(img, 0, 0);
+  }, [d, color]);
+  return <canvas ref={ref} width={16} height={16} style={{ width: size, height: size, imageRendering: 'pixelated' }} aria-hidden="true" />;
+}
+
 export function StylePreview({ style, s, size = 30 }: { style: IconStyle; s: StyleLock; size?: number }) {
   const round = s.corners === 'rounded';
+  const weight = WEIGHTS[s.weight ?? 'regular'];
+  const samples = style === 'schematic' ? SCHEMATIC : SAMPLE;
   return (
     <span className="flex gap-2">
-      {SAMPLE.map((d) => (
+      {samples.map((d) => (
         <span key={d} className="flex items-center justify-center rounded-[11px]" style={{ width: size + 18, height: size + 18, background: style === 'badge' ? s.primary : 'var(--color-paper-2)' }}>
-          <svg width={size} height={size} viewBox="0 0 24 24" strokeLinecap={round ? 'round' : 'square'} strokeLinejoin={round ? 'round' : 'miter'} aria-hidden="true">
-            {style === 'duotone' ? <path d={d} fill={s.colorMode === 'brand' ? s.accent : s.primary} fillOpacity={0.35} /> : null}
-            <path
-              d={d}
-              fill={style === 'filled' ? s.primary : 'none'}
-              stroke={style === 'badge' ? '#ffffff' : s.primary}
-              strokeWidth={style === 'filled' ? 1 : s.strokeWeight}
-            />
-          </svg>
+          {style === 'pixel' ? (
+            <PixelSample d={d} color={s.primary} size={size} />
+          ) : (
+            <svg width={size} height={size} viewBox="0 0 24 24" strokeLinecap={round && style !== 'schematic' ? 'round' : 'square'} strokeLinejoin={round && style !== 'schematic' ? 'round' : 'miter'} aria-hidden="true">
+              {style === 'duotone' ? <path d={d} fill={s.colorMode === 'brand' ? s.accent : s.primary} fillOpacity={0.35} /> : null}
+              <path
+                d={d}
+                fill={style === 'filled' ? s.primary : 'none'}
+                stroke={style === 'badge' ? '#ffffff' : s.primary}
+                strokeWidth={style === 'filled' ? 1 : (style === 'schematic' ? Math.min(s.strokeWeight, 1.5) : s.strokeWeight) * weight}
+              />
+            </svg>
+          )}
         </span>
       ))}
     </span>
@@ -122,6 +156,23 @@ export function StyleStep({ onNext }: { onNext: () => void }) {
             <Row label="Stroke">
               <Segmented label="Stroke weight" value={s.strokeWeight} onChange={(v) => setStyle({ strokeWeight: v })} options={[1.5, 2, 2.5].map((v) => ({ value: v, label: `${v} px` }))} />
             </Row>
+            {LINE_STYLES.includes(s.style) ? (
+              <>
+                <Row label="Weight">
+                  <Segmented
+                    label="Line weight"
+                    value={s.weight ?? 'regular'}
+                    onChange={(weight) => setStyle({ weight })}
+                    options={[
+                      { value: 'light', label: 'Light' },
+                      { value: 'regular', label: 'Regular' },
+                      { value: 'bold', label: 'Bold' },
+                    ]}
+                  />
+                </Row>
+                <p className="text-[13px] text-ink-2 -mt-2 sm:pl-28">Lines are traced as real strokes, so you can change the weight any time without redrawing. Small sizes get slightly heavier lines automatically.</p>
+              </>
+            ) : null}
             <Row label="Corners">
               <Segmented label="Corners" value={s.corners} onChange={(v) => setStyle({ corners: v })} options={[{ value: 'rounded', label: 'Rounded' }, { value: 'sharp', label: 'Sharp' }]} />
             </Row>
@@ -129,7 +180,7 @@ export function StyleStep({ onNext }: { onNext: () => void }) {
               <Segmented
                 label="Look"
                 value={s.hmi ? 'hmi' : 'brand'}
-                onChange={(v) => setStyle(v === 'hmi' ? { hmi: true, colorMode: 'mono', primary: HMI_GREY } : { hmi: false })}
+                onChange={(v) => setStyle(v === 'hmi' ? { hmi: true, parts: true, colorMode: 'mono', primary: HMI_GREY } : { hmi: false })}
                 options={[
                   { value: 'brand', label: 'Brand' },
                   { value: 'hmi', label: 'Industrial HMI' },
@@ -141,13 +192,21 @@ export function StyleStep({ onNext }: { onNext: () => void }) {
                 ISA-101 style: muted grey symbols. Color is kept for alarm and warning states, which you can export in step 5.
               </p>
             ) : null}
+            <div className="sm:pl-28 -my-1">
+              <Switch
+                label="State parts"
+                detail="Draw the part that moves or lights up (an impeller, a valve disc, a lamp) as its own layer, so buttons and states light up just that part."
+                checked={!!s.parts}
+                onChange={(parts) => setStyle({ parts })}
+              />
+            </div>
             <Row label="Colors">
               <Segmented label="Color mode" value={s.colorMode} onChange={(v) => setStyle({ colorMode: v })} options={[{ value: 'brand', label: 'Brand' }, { value: 'mono', label: 'One color' }]} />
             </Row>
             <Row label="Main color">
               <ColorPicker value={s.primary} colors={colors} onPick={(hex) => setStyle({ primary: hex })} label="Main color" />
             </Row>
-            {s.colorMode === 'brand' && (s.style === 'duotone' || s.style === 'badge') ? (
+            {s.colorMode === 'brand' && (s.style === 'duotone' || s.style === 'badge' || s.style === 'pixel' || s.parts) ? (
               <Row label="Accent">
                 <ColorPicker value={s.accent} colors={colors} onPick={(hex) => setStyle({ accent: hex })} label="Accent color" />
               </Row>

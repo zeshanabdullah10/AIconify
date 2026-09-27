@@ -11,11 +11,21 @@ export function logoPng(): Buffer {
   return Buffer.from(toPngDataUrl(img).split(',')[1], 'base64');
 }
 
-/** A full sheet with every cell drawn (the unit-test fixture leaves cell 10 empty on purpose). */
-function fullSheet(): string {
+/**
+ * A full sheet with every cell drawn (the unit-test fixture leaves cell 10 empty on purpose).
+ * With a state-part key colour, each icon also gets a hub in that colour, as a model following
+ * the prompt would draw it.
+ */
+function fullSheet(key?: [number, number, number]): string {
   const img = makeSheet(1024);
   fillCircle(img, 2.5 * 256, 2.5 * 256, 70, [31, 77, 58, 255], 16);
+  if (key) for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) fillCircle(img, (c + 0.5) * 256, (r + 0.5) * 256, 22, [...key, 255]);
   return toPngDataUrl(img).split(',')[1];
+}
+
+function partKey(prompt: string): [number, number, number] | undefined {
+  const hex = /draw only that part in exactly #([0-9a-f]{6})/i.exec(prompt)?.[1];
+  return hex ? [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16)) as [number, number, number] : undefined;
 }
 
 /** A cols × rows grid of rings, for edits (1×1) and variations (2×2). */
@@ -84,7 +94,8 @@ export async function mockOpenRouter(page: Page): Promise<MockLog> {
       log.images.push({ body });
       const n = Number(body.n ?? 1);
       const prompt = String(body.prompt);
-      const b64 = prompt.startsWith('Redraw') ? grid(1, 1) : prompt.includes('exactly 2 rows and 2 columns') ? grid(2, 2) : sheet;
+      const key = partKey(prompt);
+      const b64 = prompt.startsWith('Redraw') ? grid(1, 1) : prompt.includes('exactly 2 rows and 2 columns') ? grid(2, 2) : key ? fullSheet(key) : sheet;
       return json(route, { data: Array.from({ length: n }, () => ({ b64_json: b64, media_type: 'image/png' })), usage: { cost: 0.006 * n } });
     }
     return json(route, { error: { message: 'not mocked' } }, 404);

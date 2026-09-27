@@ -79,6 +79,8 @@ test('brand kit → icon set → zip, fully offline', async ({ page }) => {
   // 5. Export
   await page.getByRole('button', { name: 'Export' }).click();
   await expect(page.getByRole('heading', { name: 'Take it everywhere.' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Web & apps/ })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Customize files' }).click();
   await page.getByRole('switch', { name: 'SVG sprite' }).click();
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download zip' }).click()]);
   expect(download.suggestedFilename()).toBe('fernleaf-icons.zip');
@@ -91,7 +93,8 @@ test('brand kit → icon set → zip, fully offline', async ({ page }) => {
   expect(files).toContain('figma/icons.svg');
   const svg = await zip.file('svg/cart.svg')!.async('string');
   expect(svg).toContain('viewBox="0 0 24 24"');
-  expect(svg).toMatch(/fill="#1f4d3a"/);
+  // Duotone line work is traced as real strokes at the style's weight.
+  expect(svg).toMatch(/stroke="#1f4d3a" stroke-width="2"/);
   const png = await zip.file('png/48/cart.png')!.async('uint8array');
   expect(Array.from(png.slice(1, 4))).toEqual([80, 78, 71]); // "PNG"
 
@@ -202,19 +205,26 @@ test('industrial set: HMI look, reference icons, LabVIEW and indicator exports',
   await page.getByRole('button', { name: 'Approve all' }).click();
   await expect(page.getByText('16 icons · 16 approved')).toBeVisible();
 
-  // Export with every LabVIEW and industrial option on
+  // Export: pick LabVIEW and HMI, see them in place, then fine-tune
   await page.getByRole('button', { name: 'Export' }).click();
   await expect(page.getByRole('heading', { name: 'Take it everywhere.' })).toBeVisible();
-  await page.getByRole('switch', { name: /^EMF/ }).click();
-  await page.getByRole('group', { name: 'PNG densities' }).getByRole('button', { name: '2×' }).click();
-  await page.getByRole('switch', { name: /^Button states/ }).click();
+  await page.getByRole('button', { name: /^Web & apps/ }).click();
+  await page.getByRole('button', { name: /^Design tools/ }).click();
+  await page.getByRole('button', { name: /^LabVIEW/ }).click();
+  await page.getByRole('button', { name: /^HMI \/ SCADA/ }).click();
+  const place = page.locator('[aria-label="See it in place"]');
+  await expect(place.getByLabel('LabVIEW front panel preview')).toBeVisible();
+  await place.getByRole('radio', { name: 'HMI screen' }).click();
+  await expect(place.getByRole('img', { name: /, Alarm$/ })).toBeVisible();
+  await page.getByRole('button', { name: 'Customize files' }).click();
+  await expect(page.getByRole('switch', { name: /^EMF/ })).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByRole('switch', { name: /^Button states/ })).toHaveAttribute('aria-checked', 'true');
+  await page.getByRole('radiogroup', { name: 'Button style' }).getByRole('radio', { name: 'Toggle' }).click();
+  await page.getByRole('radio', { name: 'Wide, for Boolean text' }).click();
   await expect(page.getByRole('list', { name: 'Button state preview' }).getByRole('listitem')).toHaveCount(4);
-  await page.getByRole('switch', { name: /^VI icons/ }).click();
   await page.getByLabel(/^Banner text/).fill('daq');
-  await expect(page.getByRole('img', { name: /VI icon$/ })).toBeVisible();
-  await page.getByRole('switch', { name: /^Status variants/ }).click();
-  await expect(page.getByRole('list', { name: 'Status preview' }).getByRole('listitem')).toHaveCount(5);
-  await page.getByRole('switch', { name: /^Indicators/ }).click();
+  await expect(page.getByRole('img', { name: /VI icon$/ }).first()).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Status preview' }).getByRole('listitem')).toHaveCount(8);
   await page.getByRole('group', { name: 'Indicator kinds' }).getByRole('button', { name: 'Tank level' }).click();
 
   const count = Number((await page.getByText(/^\d+ files$/).innerText()).split(' ')[0]);
@@ -231,7 +241,9 @@ test('industrial set: HMI look, reference icons, LabVIEW and indicator exports',
   expect(files).toContain('labview/buttons/cart/true.emf');
   expect(files).toContain('labview/vi-icons/cart.png');
   expect(files).toContain('labview/glyphs/cart.png');
-  for (const s of ['normal', 'warning', 'alarm', 'disabled', 'offline']) expect(files).toContain(`states/${s}/cart.svg`);
+  for (const s of ['normal', 'on', 'off', 'warning', 'alarm', 'manual', 'disabled', 'offline']) expect(files).toContain(`states/${s}/cart.svg`);
+  expect(files).toContain('states/on/48/cart.png');
+  expect(files).toContain('labview/buttons/cart/true@2x.png');
   expect(files).toContain('labview/indicators/round-led-green-on.png');
   expect(files).toContain('labview/indicators/round-led-red-off.svg');
   expect(files).toContain('labview/indicators/tank-green-050.png');
@@ -241,7 +253,11 @@ test('industrial set: HMI look, reference icons, LabVIEW and indicator exports',
   expect(new TextDecoder().decode(emf.slice(40, 44))).toBe(' EMF');
   const vi = await zip.file('labview/vi-icons/cart.png')!.async('uint8array');
   expect(new DataView(vi.buffer, vi.byteOffset).getUint32(16)).toBe(32); // IHDR width
+  // State parts: the hub the model drew in the key colour is its own layer, and only it changes.
+  expect(await zip.file('svg/cart.svg')!.async('string')).toContain('class="active"');
+  expect(await zip.file('states/on/cart.svg')!.async('string')).toMatch(/class="active" (fill|stroke)="#2fb344"/);
   const alarm = await zip.file('states/alarm/cart.svg')!.async('string');
   expect(alarm.toLowerCase()).toContain('#d62d20');
+  expect(alarm).toMatch(/(fill|stroke)="#4d4d4d"/); // the icon itself stays grey
   expect(await zip.file('labview/README.md')!.async('string')).toMatch(/LabVIEW/);
 });

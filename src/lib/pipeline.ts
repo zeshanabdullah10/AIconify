@@ -4,7 +4,9 @@ import { TEXT_MODEL, getModel } from './models';
 import type { Client } from './openrouter';
 import { extractPalette } from './palette';
 import {
+  activeColor,
   brandMessages,
+  partKey,
   briefMessages,
   editPrompt,
   parseBrand,
@@ -18,7 +20,7 @@ import {
 } from './prompts';
 import { gridFor, sliceSheet } from './slicer';
 import type { BrandKit, IconItem, Project, SheetRun, StyleLock } from './types';
-import { vectorize } from './vectorize';
+import { vectorize, type VectorizeOptions } from './vectorize';
 
 export interface Deps {
   client: Client;
@@ -39,9 +41,25 @@ export function uid(): string {
 /** Colours an icon's pixels are allowed to snap to. */
 export function iconPalette(s: StyleLock): string[] {
   if (s.style === 'badge') return [s.primary, '#ffffff'];
+  if (s.style === 'pixel') return s.colorMode === 'brand' ? [s.primary, s.accent, '#ffffff'] : [s.primary, '#ffffff'];
   if (s.style === 'duotone' && s.colorMode === 'brand') return [s.primary, s.accent];
   return [s.primary];
 }
+
+/** How to trace a crop drawn in this style: its palette, plus the active-part key when on. */
+export function traceOptions(s: StyleLock): VectorizeOptions {
+  const key = partKey(s);
+  const palette = iconPalette(s);
+  // Line styles are traced as real strokes at the set's stroke weight.
+  const lines = LINE_STYLES.includes(s.style) ? { cap: s.corners === 'sharp' ? ('square' as const) : ('round' as const), width: s.strokeWeight } : undefined;
+  const pixel = s.style === 'pixel' ? { pixel: PIXEL_GRID } : {};
+  return { palette: key ? [...palette, key] : palette, ...(key ? { active: { key, color: activeColor(s) } } : {}), ...(lines ? { lines } : {}), ...pixel };
+}
+
+/** Styles drawn with even-width lines, traced as centerlines. */
+export const LINE_STYLES: StyleLock['style'][] = ['outline', 'duotone', 'schematic'];
+/** Pixel art is rebuilt on this grid, the size of a LabVIEW VI icon. */
+export const PIXEL_GRID = 32;
 
 export interface ProcessedCell {
   png: string;
@@ -59,10 +77,10 @@ export async function processSheet(
 ): Promise<ProcessedCell[]> {
   const sheet = await codec.decode(dataUrl);
   const cells = sliceSheet(sheet, { cols, rows, size: CROP }).slice(0, count);
-  const palette = iconPalette(style);
+  const opts = traceOptions(style);
   return Promise.all(
     cells.map(async (cell) => {
-      const svg = cell.flags.includes('missing') ? '' : traced(vectorize(cell.image, { palette }));
+      const svg = cell.flags.includes('missing') ? '' : traced(vectorize(cell.image, opts));
       // A crop that traced to nothing (only specks) is as good as an empty cell.
       const flags = svg || cell.flags.includes('missing') ? cell.flags : ['missing', ...cell.flags];
       return { png: await codec.encode(cell.image), svg, flags };
@@ -211,12 +229,12 @@ export async function iconVariations(deps: Deps, project: Project, icon: IconIte
 
 /** Re-trace every icon from its stored PNG, e.g. after the palette changed. Free. */
 export async function retraceAll(codec: Codec, project: Project): Promise<IconItem[]> {
-  const palette = iconPalette(project.style);
+  const opts = traceOptions(project.style);
   return Promise.all(
     project.icons.map(async (icon) => {
       if (!icon.png) return icon;
       const img = await codec.decode(icon.png);
-      const svg = traced(vectorize(img, { palette }));
+      const svg = traced(vectorize(img, opts));
       return svg ? { ...icon, svg } : { ...icon, svg: undefined, status: 'flagged', flags: [...new Set(['missing', ...icon.flags])] };
     }),
   );

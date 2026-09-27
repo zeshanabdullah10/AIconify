@@ -1,7 +1,11 @@
 /**
- * Tiny toolkit for the SVGs this app writes itself: `<path fill="#hex" d="...">` with absolute
+ * Tiny toolkit for the SVGs this app writes itself: `<path>` elements that are either filled
+ * (`fill="#hex"`) or stroked centerlines (`fill="none" stroke="#hex" stroke-width`), with absolute
  * M/L/Q/C/Z commands only. That is enough to move, scale, snap and re-emit icons (and to convert
  * them to EMF) without a DOM or a general SVG parser.
+ *
+ * A path may carry `class="active"`: the part of the icon that changes with state (a pump's
+ * impeller, a valve's disc, a lamp's glow). States and buttons recolour only that part.
  */
 
 export type Seg =
@@ -10,9 +14,33 @@ export type Seg =
   | { c: 'C'; p: [number, number, number, number, number, number] }
   | { c: 'Z' };
 
+export type Part = 'active';
+
 export interface FillPath {
+  /** Fill colour, or 'none' for a stroked centerline. */
   fill: string;
   d: string;
+  /** Stroke colour; set only for stroked paths. */
+  stroke?: string;
+  /** Stroke width in viewBox units. */
+  width?: number;
+  /** Line ends and corners: round, or square ends with mitred corners. */
+  cap?: 'round' | 'square';
+  part?: Part;
+}
+
+/** The colour a path is drawn in, whether filled or stroked. */
+export function colorOf(p: FillPath): string {
+  return p.stroke ?? p.fill;
+}
+
+/** The same path drawn in another colour. */
+export function paint(p: FillPath, color: string): FillPath {
+  return p.stroke ? { ...p, stroke: color } : { ...p, fill: color };
+}
+
+export function isStroke(p: FillPath): boolean {
+  return !!p.stroke;
 }
 
 const ARITY = { M: 2, L: 2, Q: 4, C: 6, Z: 0 } as const;
@@ -155,16 +183,76 @@ export function parseSvg(svg: string): { width: number; height: number; paths: F
   const [, , width, height] = (vb ? vb[1].trim().split(/\s+/).map(Number) : [0, 0, 24, 24]) as number[];
   const paths: FillPath[] = [];
   for (const m of svg.matchAll(/<path\b([^>]*)\/?>/g)) {
-    const fill = /fill="([^"]+)"/.exec(m[1]);
-    const d = /\bd="([^"]+)"/.exec(m[1]);
-    if (d) paths.push({ fill: fill ? fill[1] : '#000000', d: d[1] });
+    const attr = (name: string) => new RegExp(`(?:^|\\s)${name}="([^"]+)"`).exec(m[1])?.[1];
+    const d = attr('d');
+    if (!d) continue;
+    const path: FillPath = { fill: attr('fill') ?? '#000000', d };
+    const stroke = attr('stroke');
+    if (stroke && stroke !== 'none') {
+      path.stroke = stroke;
+      path.width = parseFloat(attr('stroke-width') ?? '1');
+      path.cap = attr('stroke-linecap') === 'square' ? 'square' : 'round';
+    }
+    if (attr('class')?.split(/\s+/).includes('active')) path.part = 'active';
+    paths.push(path);
   }
   return { width, height, paths };
 }
 
+export function pathXml(p: FillPath): string {
+  const cls = p.part ? ` class="${p.part}"` : '';
+  if (!p.stroke) return `<path${cls} fill="${p.fill}" d="${p.d}"/>`;
+  const join = p.cap === 'square' ? 'miter' : 'round';
+  return `<path${cls} fill="none" stroke="${p.stroke}" stroke-width="${fmt(p.width ?? 1)}" stroke-linecap="${p.cap ?? 'round'}" stroke-linejoin="${join}" d="${p.d}"/>`;
+}
+
 export function toSvg(paths: FillPath[], width: number, height = width): string {
-  const body = paths.filter((p) => p.d).map((p) => `<path fill="${p.fill}" d="${p.d}"/>`);
+  const body = paths.filter((p) => p.d).map(pathXml);
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}">${body.join('')}</svg>`;
+}
+
+/**
+ * Hint a stroked centerline: the stroke width becomes whole pixels, and straight horizontal and
+ * vertical runs move so both stroke edges land on pixel boundaries (onto pixel centres for odd
+ * widths, onto grid lines for even ones).
+ */
+export function snapStroke(p: FillPath, unit: number): FillPath {
+  const px = Math.max(1, Math.round((p.width ?? 1) / unit));
+  const offset = px % 2 ? unit / 2 : 0;
+  const snap = (v: number) => Math.round((v - offset) / unit) * unit + offset;
+  const segs = parseD(p.d).map((seg) => (seg.c === 'Z' ? seg : ({ ...seg, p: [...seg.p] } as Seg)));
+  let prev: number[] | null = null;
+  let start: number[] | null = null;
+  const fix = (a: number[], b: number[]) => {
+    const dx = Math.abs(b[0] - a[0]);
+    const dy = Math.abs(b[1] - a[1]);
+    if (dy > 0 && dx <= dy * 0.08) a[0] = b[0] = snap((a[0] + b[0]) / 2);
+    else if (dx > 0 && dy <= dx * 0.08) a[1] = b[1] = snap((a[1] + b[1]) / 2);
+  };
+  // Endpoints are shared views into the segment arrays, so a fix on one edge moves its neighbours too.
+  const end = (seg: Seg) => (seg.c === 'Z' ? null : seg.p);
+  for (const seg of segs) {
+    const pt = end(seg);
+    if (seg.c === 'M') {
+      prev = start = pt;
+      continue;
+    }
+    if (seg.c === 'Z') {
+      prev = start;
+      continue;
+    }
+    if (seg.c === 'L' && prev) {
+      const a = [prev[prev.length - 2], prev[prev.length - 1]];
+      const b = [pt![0], pt![1]];
+      fix(a, b);
+      prev[prev.length - 2] = a[0];
+      prev[prev.length - 1] = a[1];
+      pt![0] = b[0];
+      pt![1] = b[1];
+    }
+    prev = pt;
+  }
+  return { ...p, width: px * unit, d: formatD(segs) };
 }
 
 /** Snap a whole icon for crisp rendering at `px` pixels. */
@@ -172,7 +260,26 @@ export function snapSvg(svg: string, px: number): string {
   const { width, height, paths } = parseSvg(svg);
   const unit = width / px;
   return toSvg(
-    paths.map((p) => ({ ...p, d: snapD(p.d, unit) })),
+    paths.map((p) => (p.stroke ? snapStroke(p, unit) : { ...p, d: snapD(p.d, unit) })),
+    width,
+    height,
+  );
+}
+
+/** Stroke width multipliers for the weight setting. */
+export const WEIGHTS = { light: 0.75, regular: 1, bold: 1.35 } as const;
+
+/**
+ * Stroke widths for rendering at `px` pixels: `weight` scales every stroke (light, regular,
+ * bold), and small sizes get relatively heavier lines so they don't fade, the way type designers
+ * cut optical sizes. Filled paths are unchanged.
+ */
+export function opticalSvg(svg: string, px: number, weight = 1): string {
+  const { width, height, paths } = parseSvg(svg);
+  if (!paths.some(isStroke)) return svg;
+  const optical = Math.pow(24 / Math.max(8, px), 0.25);
+  return toSvg(
+    paths.map((p) => (p.stroke ? { ...p, width: (p.width ?? 1) * weight * optical } : p)),
     width,
     height,
   );
@@ -182,7 +289,7 @@ export function snapSvg(svg: string, px: number): string {
 export function placePaths(svg: string, size: number, x: number, y: number): FillPath[] {
   const { width, paths } = parseSvg(svg);
   const s = size / (width || 24);
-  return paths.map((p) => ({ fill: p.fill, d: transformD(p.d, s, x, y) }));
+  return paths.map((p) => ({ ...p, d: transformD(p.d, s, x, y), ...(p.stroke ? { width: (p.width ?? 1) * s } : {}) }));
 }
 
 export function rectD(x: number, y: number, w: number, h: number): string {

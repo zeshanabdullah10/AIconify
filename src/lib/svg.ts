@@ -42,20 +42,27 @@ export function pathsOf(svg: string): string {
 }
 
 export function colorsOf(svg: string): string[] {
-  return [...new Set([...svg.matchAll(/fill="(#[0-9a-f]{6})"/gi)].map((m) => m[1].toLowerCase()))];
+  return [...new Set([...svg.matchAll(/(?:fill|stroke)="(#[0-9a-f]{6})"/gi)].map((m) => m[1].toLowerCase()))];
 }
 
 /** Single-colour icons use currentColor so they inherit text colour in apps. */
 export function withCurrentColor(svg: string): string {
   if (colorsOf(svg).length !== 1) return svg;
-  return svg.replace(/fill="#[0-9a-f]{6}"/gi, 'fill="currentColor"');
+  return svg.replace(/(fill|stroke)="#[0-9a-f]{6}"/gi, '$1="currentColor"');
 }
 
 export function recolor(svg: string, map: Record<string, string>): string {
-  return svg.replace(/fill="(#[0-9a-f]{6})"/gi, (all, hex: string) => {
+  return svg.replace(/(fill|stroke)="(#[0-9a-f]{6})"/gi, (all, attr: string, hex: string) => {
     const to = map[hex.toLowerCase()];
-    return to ? `fill="${to}"` : all;
+    return to ? `${attr}="${to}"` : all;
   });
+}
+
+/** SVG attribute names as React props. */
+function jsx(markup: string): string {
+  return markup
+    .replace(/\bclass=/g, 'className=')
+    .replace(/\b(fill-rule|stroke-width|stroke-linecap|stroke-linejoin)=/g, (_, a: string) => a.replace(/-(\w)/g, (__, c: string) => c.toUpperCase()) + '=');
 }
 
 export function withTitle(svg: string, title: string): string {
@@ -81,7 +88,7 @@ export function figmaSheet(icons: { id: string; svg: string }[], cols = 8, cell 
 }
 
 export function reactComponent(name: string, svg: string): string {
-  const jsxPaths = pathsOf(withCurrentColor(svg)).replace(/fill-rule=/g, 'fillRule=');
+  const jsxPaths = jsx(pathsOf(withCurrentColor(svg)));
   return `import type { SVGProps } from 'react';
 
 export interface ${name}Props extends SVGProps<SVGSVGElement> {

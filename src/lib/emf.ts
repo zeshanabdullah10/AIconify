@@ -2,9 +2,10 @@ import { hexToRgb, isHex } from './color';
 import { parseD, parseSvg } from './paths';
 
 /**
- * Minimal Enhanced Metafile (EMF) writer for our own filled-path SVGs. EMF is the vector format
- * Windows apps, LabVIEW included, can place and scale without blurring. Every colour becomes one
- * solid brush and one filled path; quadratic curves are raised to cubic Béziers.
+ * Minimal Enhanced Metafile (EMF) writer for our own SVGs. EMF is the vector format Windows apps,
+ * LabVIEW included, can place and scale without blurring. A filled path becomes a solid brush and
+ * a filled path; a stroked centerline becomes a geometric pen (round or square ends) and a stroked
+ * path, so it keeps its true line width when scaled. Quadratic curves are raised to cubic Béziers.
  */
 
 const EMR = {
@@ -24,7 +25,16 @@ const EMR = {
   ENDPATH: 60,
   CLOSEFIGURE: 61,
   FILLPATH: 62,
+  STROKEPATH: 64,
+  EXTCREATEPEN: 95,
 } as const;
+
+// Pen style bits (MS-EMF PenStyle)
+const PS_GEOMETRIC = 0x10000;
+const PS_ENDCAP_ROUND = 0;
+const PS_ENDCAP_SQUARE = 0x100;
+const PS_JOIN_ROUND = 0;
+const PS_JOIN_MITER = 0x2000;
 
 const MM_ANISOTROPIC = 8;
 const WINDING = 2;
@@ -75,16 +85,11 @@ export function svgToEmf(svg: string, px = 32): Uint8Array {
   body.record(EMR.SETVIEWPORTEXTEX, w, h);
   body.record(EMR.SETPOLYFILLMODE, WINDING);
 
-  for (const path of paths) {
-    if (!isHex(path.fill)) continue;
-    const { r, g, b } = hexToRgb(path.fill);
-    // Brush handle 1 is reused for every colour: create, select, fill, delete.
-    body.record(EMR.CREATEBRUSHINDIRECT, 1, 0 /* BS_SOLID */, r | (g << 8) | (b << 16), 0);
-    body.record(EMR.SELECTOBJECT, 1);
+  const outline = (d: string) => {
     body.record(EMR.BEGINPATH);
     let cur: [number, number] = [0, 0];
     let start: [number, number] = [0, 0];
-    for (const seg of parseD(path.d)) {
+    for (const seg of parseD(d)) {
       if (seg.c === 'M') {
         cur = start = [seg.p[0], seg.p[1]];
         body.record(EMR.MOVETOEX, P(cur[0]), P(cur[1]));
@@ -108,6 +113,28 @@ export function svgToEmf(svg: string, px = 32): Uint8Array {
       }
     }
     body.record(EMR.ENDPATH);
+  };
+
+  for (const path of paths) {
+    if (path.stroke) {
+      if (!isHex(path.stroke)) continue;
+      const { r, g, b } = hexToRgb(path.stroke);
+      const style = PS_GEOMETRIC | (path.cap === 'square' ? PS_ENDCAP_SQUARE | PS_JOIN_MITER : PS_ENDCAP_ROUND | PS_JOIN_ROUND);
+      // Pen handle 2: ihPen, no brush bitmap (4 zeros), then LogPenEx with no custom dash entries.
+      body.record(EMR.EXTCREATEPEN, 2, 0, 0, 0, 0, style, Math.max(1, P(path.width ?? 1)), 0 /* BS_SOLID */, r | (g << 8) | (b << 16), 0, 0);
+      body.record(EMR.SELECTOBJECT, 2);
+      outline(path.d);
+      body.record(EMR.STROKEPATH, 0, 0, P(width), P(height));
+      body.record(EMR.SELECTOBJECT, 0x80000000 | 7 /* BLACK_PEN */);
+      body.record(EMR.DELETEOBJECT, 2);
+      continue;
+    }
+    if (!isHex(path.fill)) continue;
+    const { r, g, b } = hexToRgb(path.fill);
+    // Brush handle 1 is reused for every colour: create, select, fill, delete.
+    body.record(EMR.CREATEBRUSHINDIRECT, 1, 0 /* BS_SOLID */, r | (g << 8) | (b << 16), 0);
+    body.record(EMR.SELECTOBJECT, 1);
+    outline(path.d);
     body.record(EMR.FILLPATH, 0, 0, P(width), P(height));
     body.record(EMR.SELECTOBJECT, 0x80000000 | 5 /* NULL_BRUSH */);
     body.record(EMR.DELETEOBJECT, 1);
@@ -137,7 +164,7 @@ export function svgToEmf(svg: string, px = 32): Uint8Array {
   u32(44, 0x10000);
   u32(48, HEADER_SIZE + body.bytes + eof.bytes);
   u32(52, 1 + body.records + eof.records);
-  header.setUint16(56, 2, true); // handles: index 0 is reserved, 1 is our brush
+  header.setUint16(56, 3, true); // handles: index 0 is reserved, 1 is our brush, 2 our pen
   header.setUint16(58, 0, true);
   u32(60, 0); // no description
   u32(64, 0);

@@ -23,6 +23,10 @@ export const ICON_PACKS: Record<string, string[]> = {
     'Valve', 'Control valve', 'Pump', 'Compressor', 'Fan', 'Tank', 'Heater', 'Heat exchanger',
     'Mixer', 'Filter', 'Flow meter', 'Level sensor', 'Pipe', 'Conveyor', 'Boiler', 'Chiller',
   ],
+  'P&ID symbols': [
+    'Centrifugal pump', 'Gate valve', 'Globe valve', 'Ball valve', 'Check valve', 'Control valve', 'Relief valve', 'Heat exchanger',
+    'Vessel', 'Compressor', 'Flow transmitter', 'Pressure transmitter', 'Temperature element', 'Level indicator', 'Orifice plate', 'Motor',
+  ],
   'Test sequencer': [
     'Run', 'Pause', 'Stop', 'Abort', 'Step into', 'Skip', 'Loop', 'Retry',
     'Pass', 'Fail', 'Report', 'Log', 'Limits', 'Configure', 'Station', 'Operator',

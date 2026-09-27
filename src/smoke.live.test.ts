@@ -76,4 +76,22 @@ describe.skipIf(!key)('live OpenRouter', () => {
       expect(traced).toBeGreaterThanOrEqual(NAMES.length - 2);
     }, 240_000);
   }
+
+  // Phase-1 experiment: does the model paint the state part in the reserved key colour?
+  it('draws state parts in the key colour (equipment sheet)', async () => {
+    const names = ['Pump', 'Valve', 'Fan', 'Tank', 'Motor', 'Heater', 'Lamp', 'Mixer', 'Lock'];
+    const p = { ...project, modelId: MODELS[0], quality: 'low' as const, candidates: 1, style: { ...project.style, parts: true, hmi: true, colorMode: 'mono' as const, primary: '#4d4d4d' } };
+    const res = await generateIcons(deps('parts'), p, names);
+    const sheet = res.runs[0].candidates[0].dataUrl;
+    writeFileSync(`${out}/parts-sheet.png`, Buffer.from(sheet.split(',')[1], 'base64'));
+    const withPart = res.icons.filter((i) => i.svg?.includes('class="active"'));
+    const shown = (svg = '') => svg.replace('<svg ', '<svg width="72" height="72" ').replace(/class="active" fill="[^"]+"/g, 'class="active" fill="#d62d20"');
+    report.push(
+      `<h2>State parts · ${withPart.length}/${names.length} icons have an active part (shown red)</h2><img src="parts-sheet.png" width="360">`,
+      `<div style="display:flex;gap:12px;flex-wrap:wrap">${res.icons.map((i) => `<figure style="margin:0;width:96px;text-align:center"><div style="width:72px;height:72px;margin:auto">${shown(i.svg)}</div><figcaption>${i.name}</figcaption></figure>`).join('')}</div>`,
+    );
+    console.log(`state parts: ${withPart.length}/${names.length}`, withPart.map((i) => i.name).join(', '));
+    // Not every object has a state part, but most of these do.
+    expect(withPart.length).toBeGreaterThanOrEqual(4);
+  }, 240_000);
 });

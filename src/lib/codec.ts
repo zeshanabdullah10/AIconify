@@ -6,6 +6,7 @@ export interface Codec {
   decode(dataUrl: string): Promise<Raster>;
   encode(img: Raster): Promise<string>;
   /** Render an SVG string to PNG bytes at size × size. */
+  /** Render an SVG `size` pixels wide; the height follows its viewBox. */
   rasterizeSvg(svg: string, size: number): Promise<Uint8Array>;
 }
 
@@ -49,11 +50,14 @@ export const browserCodec: Codec = {
     return c.toDataURL('image/png');
   },
   async rasterizeSvg(svg, size) {
-    const withSize = svg.replace('<svg ', `<svg width="${size}" height="${size}" `);
+    // `size` is the width; the height follows the viewBox, so wide buttons keep their shape.
+    const vb = /viewBox="[\d.-]+ [\d.-]+ ([\d.]+) ([\d.]+)"/.exec(svg);
+    const height = vb ? Math.max(1, Math.round((size * Number(vb[2])) / Number(vb[1]))) : size;
+    const withSize = svg.replace('<svg ', `<svg width="${size}" height="${height}" `);
     const url = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(withSize)}`;
     const img = await loadImage(url);
-    const c = canvas(size, size);
-    c.getContext('2d')!.drawImage(img, 0, 0, size, size);
+    const c = canvas(size, height);
+    c.getContext('2d')!.drawImage(img, 0, 0, size, height);
     return toBytes(c);
   },
 };
