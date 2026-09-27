@@ -20,23 +20,29 @@ export function InPlace({ project, o }: { project: Project; o: ExportOptions }) 
   // Icons with a state part show states best; put them first.
   const byParts = [...icons].sort((a, b) => Number(b.svg!.includes('class="active"')) - Number(a.svg!.includes('class="active"')));
   return (
-    <div className="flex flex-col gap-4">
-      <Segmented
-        size="sm"
-        label="Preview"
-        value={view}
-        onChange={setView}
-        options={[
-          { value: 'panel', label: 'Front panel' },
-          { value: 'hmi', label: 'HMI screen' },
-          { value: 'web', label: 'Web' },
-          { value: 'sizes', label: 'Sizes' },
-        ]}
-      />
-      {view === 'panel' ? <FrontPanel project={project} o={o} icons={byParts} /> : null}
-      {view === 'hmi' ? <HmiScreen project={project} o={o} icons={byParts} /> : null}
-      {view === 'web' ? <Web project={project} o={o} icons={icons} /> : null}
-      {view === 'sizes' ? <Sizes project={project} o={o} icons={icons} /> : null}
+    <div>
+      <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b border-line">
+        <h2 className="flex-1 min-w-0 text-[14px] font-semibold">See it in place</h2>
+        <Segmented
+          size="sm"
+          label="Preview"
+          value={view}
+          onChange={setView}
+          options={[
+            { value: 'panel', label: 'Front panel' },
+            { value: 'hmi', label: 'HMI screen' },
+            { value: 'web', label: 'Web' },
+            { value: 'sizes', label: 'Sizes' },
+          ]}
+        />
+      </div>
+      <div className="p-4 grid-paper">
+        {view === 'panel' ? <FrontPanel project={project} o={o} icons={byParts} /> : null}
+        {view === 'hmi' ? <HmiScreen project={project} o={o} icons={byParts} /> : null}
+        {view === 'web' ? <Web project={project} o={o} icons={icons} /> : null}
+        {view === 'sizes' ? <Sizes project={project} o={o} icons={icons} /> : null}
+      </div>
+      <p className="px-4 py-2 text-[12px] text-ink-3 border-t border-line">Drawn by the same code that writes the zip.</p>
     </div>
   );
 }
@@ -58,13 +64,27 @@ function FrontPanel({ project, o, icons }: { project: Project; o: ExportOptions;
   const leds = kinds.filter((k) => k !== 'tank').slice(0, 1);
   const vi = viIcon(iconAt(project, o, icons[0].svg!, 20), { banner: o.bannerText, bannerColor: o.bannerColor || undefined, pixel: project.style.style === 'pixel' });
   return (
-    <figure aria-label="LabVIEW front panel preview" className="m-0 rounded-[12px] overflow-hidden shadow-[0_0_0_1px_var(--color-line)] text-[#1d1d1f]">
-      <div className="flex items-center gap-3 px-3 h-11 bg-[#f4f4f4] border-b border-[#c8c8c8] text-[12px]">
-        <span className="flex-1 truncate">{project.brand.name || 'Main'}.vi Front Panel</span>
-        <Img svg={vi} w={32} label="VI icon" />
+    <figure aria-label="LabVIEW front panel preview" className="m-0 rounded-[8px] overflow-hidden shadow-[0_8px_30px_rgb(0_0_0/0.12),0_0_0_1px_rgb(0_0_0/0.18)] text-[#1d1d1f] bg-[#f3f3f3]">
+      <div className="flex items-center gap-3 px-3 h-9 bg-[#fbfbfb] border-b border-[#d6d6d6] text-[12px]">
+        <span className="flex gap-1.5" aria-hidden="true">
+          <span className="w-2.5 h-2.5 rounded-full bg-[#d0d0d0]" />
+          <span className="w-2.5 h-2.5 rounded-full bg-[#d0d0d0]" />
+          <span className="w-2.5 h-2.5 rounded-full bg-[#d0d0d0]" />
+        </span>
+        <span className="flex-1 truncate text-center font-medium">{project.brand.name || 'Main'}.vi Front Panel</span>
+        <span className="w-9" />
       </div>
-      <div className="p-5 bg-[#e6e6e6] flex flex-wrap gap-x-6 gap-y-5 items-end" style={{ backgroundImage: 'radial-gradient(#cfcfcf 1px, transparent 1px)', backgroundSize: '12px 12px' }}>
-        {icons.slice(0, 4).map((icon, i) => {
+      <div className="flex items-center gap-4 px-3 h-7 bg-[#f3f3f3] border-b border-[#dadada] text-[11px] text-[#444]">
+        {['File', 'Edit', 'View', 'Project', 'Operate', 'Tools', 'Window', 'Help'].map((m) => (
+          <span key={m} aria-hidden="true" className="hidden sm:inline">{m}</span>
+        ))}
+        <span className="flex-1" />
+        <span className="w-8 h-8 -my-1 border border-[#bdbdbd] bg-white">
+          <Img svg={vi} w={30} label="VI icon" />
+        </span>
+      </div>
+      <div className="panel-face p-6 min-h-[220px] flex flex-wrap gap-x-7 gap-y-6 items-end content-start">
+        {icons.slice(0, 6).map((icon, i) => {
           const on = i % 2 === 1;
           return (
             <div key={icon.id} className="flex flex-col gap-1 text-[11px]">
@@ -113,7 +133,7 @@ function HmiScreen({ project, o, icons }: { project: Project; o: ExportOptions; 
   const alarms = items.filter((_, i) => HMI_STATES[i] === 'alarm').length;
   const warnings = items.filter((_, i) => HMI_STATES[i] === 'warning').length;
   return (
-    <figure aria-label="HMI screen preview" className="m-0 rounded-[12px] overflow-hidden shadow-[0_0_0_1px_var(--color-line)] text-[#1d1d1f] bg-[#dcdcdc]">
+    <figure aria-label="HMI screen preview" className="m-0 rounded-[8px] overflow-hidden shadow-[0_8px_30px_rgb(0_0_0/0.12),0_0_0_1px_rgb(0_0_0/0.18)] text-[#1d1d1f] bg-[#dcdcdc]">
       <div className="flex items-center gap-3 px-4 h-10 bg-[#c8c8c8] text-[12px]">
         <span className="flex-1 font-medium">Unit 1 · Overview</span>
         <span>{alarms} alarm · {warnings} warning</span>
@@ -143,7 +163,7 @@ function HmiScreen({ project, o, icons }: { project: Project; o: ExportOptions; 
 function Web({ project, o, icons }: { project: Project; o: ExportOptions; icons: IconItem[] }) {
   const nav = icons.slice(0, 5);
   const panel = (dark: boolean) => (
-    <div className={cx('rounded-[12px] p-3 flex flex-col gap-3 shadow-[0_0_0_1px_var(--color-line)]', dark ? 'bg-[#1c1c1e] text-white' : 'bg-white text-[#1d1d1f]')}>
+    <div className={cx('rounded-[8px] p-3 flex flex-col gap-3 shadow-[0_0_0_1px_rgb(0_0_0/0.14)]', dark ? 'bg-[#1c1c1e] text-white' : 'bg-white text-[#1d1d1f]')}>
       <nav className="flex gap-1 flex-wrap">
         {nav.map((icon, i) => (
           <span key={icon.id} className={cx('flex items-center gap-1.5 h-8 px-2.5 rounded-[8px] text-[12px]', i === 0 && (dark ? 'bg-white/10' : 'bg-[#f2f2f4]'))}>
@@ -178,7 +198,7 @@ function Sizes({ project, o, icons }: { project: Project; o: ExportOptions; icon
   return (
     <div aria-label="Sizes preview" className="grid gap-3">
       {[false, true].map((dark) => (
-        <div key={String(dark)} className={cx('rounded-[12px] p-3 flex flex-col gap-3 shadow-[0_0_0_1px_var(--color-line)]', dark ? 'bg-[#1c1c1e] text-white' : 'bg-white text-[#1d1d1f]')}>
+        <div key={String(dark)} className={cx('rounded-[8px] p-3 flex flex-col gap-3 shadow-[0_0_0_1px_rgb(0_0_0/0.14)]', dark ? 'bg-[#1c1c1e] text-white' : 'bg-white text-[#1d1d1f]')}>
           {[16, 24, 32, 48].map((px) => (
             <div key={px} className="flex items-center gap-2.5 flex-wrap">
               <span className="w-7 text-[11px] font-mono opacity-60">{px}</span>

@@ -8,14 +8,13 @@ It runs entirely in your browser. There is no server: you connect your own [Open
 
 ## How it works
 
+Three screens, with the next action always in the bar at the bottom.
+
 | Step | What happens | Model | Typical cost |
 | --- | --- | --- | --- |
-| 1. Brand | Logo colors are measured locally (k-means). The logo image, PDF guideline text and your notes go to a vision model, which returns palette roles, personality, do/don't rules and suggested icons. | `deepseek/deepseek-v4.1-flash` | < $0.001 |
-| 2. Style | Pick outline, filled, duotone, badge, schematic (P&ID) or 32×32 pixel art, plus stroke, weight, corners and colors, or the Industrial HMI look. Turn on state parts to have moving or glowing parts drawn in a reserved colour. This becomes a fixed style block sent with every image prompt. Optionally upload up to 8 icons from an existing set to match. | — | free |
-| 3. Generate | The text model writes a one-line visual brief per icon. Up to 16 icons are drawn on one 4×4 sheet. | `openai/gpt-image-2.5-flare` (default) | ~$0.01 per sheet at draft quality |
-| 3b. Cut & trace | Connected-component slicing with gutter detection keeps detached parts (the dot of an "i") with their icon. Each crop is centered, snapped to the brand palette and traced: line work as stroked centerlines at the set's exact stroke width, solid shapes as fills, pixel art on an exact 32×32 grid. | runs in the browser | free |
-| 4. Review | Approve, rename, or edit an icon with a sentence. Set checks flag icons that are heavier, lighter, off-centre or too detailed for 16 px compared with the rest, each with a suggested fix. Edits and "4 options" send approved icons as style references. | same image model | ~$0.01 each |
-| 5. Export | Say where the icons are going (web, design tools, LabVIEW, HMI) and the zip is set up for it. Previews show the set on a LabVIEW front panel, an HMI screen, a web toolbar and at 16–48 px. SVG (with `<title>`), PNG at any sizes and densities, EMF, typed React components, SVG sprite, Figma sheet, `brand.json`, and the LabVIEW and HMI pack below. | — | free |
+| 1. Set up | Pick the icons (packs for operator panels, test sequencers, instrumentation, process equipment and P&ID come first) and one look: outline, filled, duotone, badge, schematic (P&ID) or 32×32 pixel art, plus weight, stroke, corners, colours, the Industrial HMI look and state parts. A live preview shows sample icons as LabVIEW buttons, at 32/24/16 px and in HMI states before anything is drawn. Optional, folded away: match an existing icon set (up to 8 reference icons), and a brand kit, where the logo, PDF guideline text and notes go to a vision model that returns palette roles, personality, do/don't rules and suggested icons. | `deepseek/deepseek-v4.1-flash` for the brand kit | < $0.001 |
+| 2. Draw | The text model writes a one-line visual brief per icon and up to 16 icons are drawn on one 4×4 sheet. Icons not drawn yet show as empty tiles. Each sheet is cut apart (connected components with gutter detection, so the dot of an "i" stays with its icon), snapped to the palette and traced: line work as stroked centerlines at the set's exact width, solid shapes as fills, pixel art on an exact 32×32 grid. Review on the same screen: view the set as icons, as LabVIEW buttons or on dark; approve, rename, or edit an icon with a sentence. The inspector shows the selected icon as a False/True button, a VI icon and in On/Alarm states. Set checks flag icons that are heavier, lighter, off-centre or too detailed for 16 px, each with a suggested fix. | `openai/gpt-image-2.5-flare` (default) | ~$0.01 per sheet at draft quality, ~$0.01 per edit |
+| 3. Export | LabVIEW is the default target; add HMI / SCADA, web and design tools as needed. The settings for buttons, VI icons, HMI states and indicators sit next to a preview of the set on a LabVIEW front panel, an HMI screen, a web toolbar and at 16–48 px. Formats, sizes and names are under Files & formats. | — | free |
 
 Image models available (pick per project):
 
@@ -28,7 +27,7 @@ Image models available (pick per project):
 
 ### Match an existing icon set
 
-In step 2, drop up to 8 SVG or PNG icons you already use. They are sent to the image model as style references ahead of any icons you've approved, so new sheets follow their line weight and shapes. **Use their color** sets the main color from them. Models without reference support (Recraft) show a warning.
+In Set up, open **Match an existing icon set** and drop up to 8 SVG or PNG icons you already use. They are sent to the image model as style references ahead of any icons you've approved, so new sheets follow their line weight and shapes. **Use their color** sets the main color from them. Models without reference support (Recraft) show a warning.
 
 ### Line icons as real strokes
 
@@ -52,7 +51,7 @@ Everything here is drawn in the browser from the traced icons, so it costs nothi
 | Equipment states | `states/{normal,on,off,warning,alarm,manual,disabled,offline}/` as SVG (and EMF), with PNGs at 24–64 px. ISA-101 style: on/off change only the active part; warning (triangle), alarm (diamond) and manual (M) add a corner badge whose shape carries the meaning without relying on colour. |
 | Indicators | `labview/indicators/`: round and square LEDs and pilot lamps as on/off pairs, and tank levels (0–100%) as frames for a Picture Ring, in signal or brand colors. |
 
-The **Industrial HMI** look in step 2 switches to one ISA-101 grey, turns on state parts and adds HMI wording to the prompt. The icon packs include instrumentation, process equipment, P&ID symbols and test sequencer sets. `labview/README.md` in the zip explains how to import each part. Limits: one banner per export; picking every target at once makes a large zip (about 1,500 files for 16 icons), mostly @2x PNGs of every state.
+The **Industrial HMI** look in Set up switches to one ISA-101 grey, turns on state parts and adds HMI wording to the prompt. The icon packs include instrumentation, process equipment, P&ID symbols and test sequencer sets. `labview/README.md` in the zip explains how to import each part. Limits: one banner per export; picking every target at once makes a large zip (about 1,500 files for 16 icons), mostly @2x PNGs of every state.
 
 Costs shown in the app are estimates until the call returns; the running total uses the cost OpenRouter reports for each request.
 
@@ -95,7 +94,8 @@ src/lib/        framework-free core (runs in Node for tests)
   emf.ts          EMF writer for filled and stroked paths
   labview.ts      button skins and states, HMI equipment states, VI icons, import guide
   indicators.ts   LEDs, pilot lamps and tank levels
-src/steps/      the five screens
+  samples.ts      hand-drawn sample icons for the live style preview
+src/steps/      the three screens: Set up, Draw, Export
 src/components/ UI kit (buttons, segmented controls, dialogs)
 e2e/            Playwright tests with a mocked OpenRouter
 ```

@@ -24,6 +24,11 @@ const PATHS = {
   moon: 'M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z',
   external: 'M14 4h6v6M20 4l-9 9M18 14v6H4V6h6',
   chevronDown: 'M6 9l6 6 6-6',
+  chevronRight: 'M9 6l6 6-6 6',
+  play: 'M7 4.5v15l12.5-7.5z',
+  panel: 'M3 5h18v14H3zM3 9h18M7 13h4M7 16h2M15 13h3v3h-3z',
+  toolbox: 'M4 8h16v11H4zM9 8V5h6v3M4 13h16',
+  palette: 'M12 3a9 9 0 1 0 0 18c1.2 0 1.5-.8 1.5-1.5 0-1.2-1-1.5-1-2.5s.8-1.5 2-1.5H17a4 4 0 0 0 4-4c0-4.5-4-8.5-9-8.5zM7.5 11a1 1 0 1 0 0-.01M10 7.5a1 1 0 1 0 0-.01M14.5 7.5a1 1 0 1 0 0-.01',
   info: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 11v5M12 8h.01',
 } as const;
 

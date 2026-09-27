@@ -34,6 +34,8 @@ function contentSecurityPolicy(): Plugin {
 export default defineConfig({
   base: process.env.BASE_PATH ?? '/',
   plugins: [react(), tailwindcss(), contentSecurityPolicy()],
+  // Fonts stay files: small ones would otherwise be inlined as data: URLs, which the CSP blocks.
+  build: { assetsInlineLimit: (file) => (/\.woff2?$/.test(file) ? false : undefined) },
   test: {
     globals: true,
     environment: 'jsdom',

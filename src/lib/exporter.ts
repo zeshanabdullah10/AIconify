@@ -18,10 +18,10 @@ const SNAP_MAX = 64;
 type FormatKeys = 'svg' | 'png' | 'react' | 'sprite' | 'figma' | 'emf' | 'buttons' | 'viIcons' | 'states' | 'indicators';
 
 export const TARGETS: { id: ExportTarget; label: string; hint: string; files: Partial<Record<FormatKeys, true>> & { pngSizes?: number[]; pngScales?: number[] } }[] = [
-  { id: 'web', label: 'Web & apps', hint: 'SVG, React components and PNGs', files: { svg: true, react: true, png: true, pngSizes: [24, 48] } },
-  { id: 'design', label: 'Design tools', hint: 'Figma layers and large PNGs', files: { svg: true, figma: true, png: true, pngSizes: [512] } },
   { id: 'labview', label: 'LabVIEW', hint: 'Button states, VI icons, EMF and @2x PNGs', files: { png: true, emf: true, buttons: true, viIcons: true, pngSizes: [16, 32], pngScales: [1, 2] } },
   { id: 'hmi', label: 'HMI / SCADA', hint: 'Equipment states, alarm badges and indicators', files: { svg: true, png: true, states: true, indicators: true, pngSizes: [24, 48] } },
+  { id: 'web', label: 'Web & apps', hint: 'SVG, React components and PNGs', files: { svg: true, react: true, png: true, pngSizes: [24, 48] } },
+  { id: 'design', label: 'Design tools', hint: 'Figma layers and large PNGs', files: { svg: true, figma: true, png: true, pngSizes: [512] } },
 ];
 
 /**

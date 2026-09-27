@@ -1,4 +1,8 @@
 export const ICON_PACKS: Record<string, string[]> = {
+  'Operator panel': [
+    'Start', 'Stop', 'Pause', 'Reset', 'Acknowledge alarm', 'Emergency stop', 'Auto mode', 'Manual mode',
+    'Trend chart', 'Log data', 'Export report', 'Settings', 'User login', 'Home', 'Back', 'Help',
+  ],
   'App essentials': [
     'Home', 'Search', 'Profile', 'Settings', 'Notifications', 'Favorites', 'Chat', 'Calendar',
     'Share', 'Download', 'Upload', 'Edit', 'Delete', 'Filter', 'Help', 'Lock',
@@ -32,3 +36,10 @@ export const ICON_PACKS: Record<string, string[]> = {
     'Pass', 'Fail', 'Report', 'Log', 'Limits', 'Configure', 'Station', 'Operator',
   ],
 };
+
+/** Packs for LabVIEW and industrial work come first; the rest are general-purpose. */
+export const PACK_GROUPS: { label: string; packs: string[] }[] = [
+  { label: 'LabVIEW & test', packs: ['Operator panel', 'Test sequencer', 'Instrumentation'] },
+  { label: 'Process & HMI', packs: ['Process equipment', 'P&ID symbols'] },
+  { label: 'General', packs: ['App essentials', 'E-commerce', 'Social', 'Food & drink'] },
+];

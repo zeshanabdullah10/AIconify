@@ -21,16 +21,17 @@ test.afterEach(async ({ page }) => {
 test('brand kit → icon set → zip, fully offline', async ({ page }) => {
   const log = await mockOpenRouter(page);
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Start with your brand.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Set up the icon set' })).toBeVisible();
 
-  // 1. Brand
+  // 1. Set up: the brand kit is optional and folded away
+  await page.getByRole('button', { name: 'Brand kit' }).click();
   await page.getByLabel('Upload logo').setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: logoPng() });
   await expect(page.getByRole('img', { name: 'Your logo' })).toBeVisible();
   await page.getByLabel('Upload brand guidelines PDF').setInputFiles({ name: 'guidelines.pdf', mimeType: 'application/pdf', buffer: guidelinesPdf() });
   await expect(page.getByText(/1 pages · \d+ characters read/)).toBeVisible();
   await page.getByRole('button', { name: 'Analyze brand' }).click();
   await expect(page.getByText('Brand analyzed.')).toBeVisible();
-  await expect(page.getByLabel('Brand name')).toHaveValue('Fernleaf');
+  await expect(page.getByLabel('Set name')).toHaveValue('Fernleaf');
   // PDF text is read in the browser and only the text goes to the model
   expect(JSON.stringify(log.chat[0].body.messages)).toContain('Never use gradients');
   expect(JSON.stringify(log.chat[0].body.messages)).toContain('#1f4d3a');
@@ -39,19 +40,20 @@ test('brand kit → icon set → zip, fully offline', async ({ page }) => {
   expect(JSON.stringify(log.chat[0].body.messages)).toContain('data:image/png;base64');
   expect(log.chat[0].body.model).toBe('deepseek/deepseek-v4.1-flash');
 
-  // 2. Style
-  await page.getByRole('button', { name: 'Continue' }).click();
-  await expect(page.getByRole('heading', { name: 'Lock one look for the set.' })).toBeVisible();
+  // The analysis suggested icons, and the look is previewed as LabVIEW buttons
   await expect(page.getByRole('list', { name: 'Icon names' }).getByRole('listitem')).toHaveCount(16);
-  await page.getByRole('radio', { name: /Duotone/ }).click();
-  await expect(page.getByText(/duotone icons/)).toBeAttached();
+  await expect(page.getByRole('img', { name: 'Pump button, false' })).toBeVisible();
+  await page.getByRole('radio', { name: /^Duotone/ }).click();
+  await page.getByRole('button', { name: 'Prompt' }).click();
+  await expect(page.getByText(/duotone icons/)).toBeVisible();
   await page.getByRole('button', { name: 'Suggest' }).click();
   await expect(page.getByRole('list', { name: 'Icon names' }).getByRole('listitem')).toHaveCount(18);
   await page.getByRole('button', { name: 'Remove Wifi' }).click();
   await page.getByRole('button', { name: 'Remove Parking' }).click();
 
-  // 3. Generate
-  await page.getByRole('button', { name: 'Continue' }).click();
+  // 2. Draw: names not drawn yet show as empty tiles
+  await page.getByRole('button', { name: 'Continue to Draw' }).click();
+  await expect(page.getByLabel('Cart, not drawn yet')).toBeVisible();
   await page.getByRole('button', { name: 'Generate icons' }).click();
   await expect(page.getByText('16 icons ready.')).toBeVisible({ timeout: 30_000 });
   expect(log.images).toHaveLength(1);
@@ -60,8 +62,7 @@ test('brand kit → icon set → zip, fully offline', async ({ page }) => {
   await page.getByRole('radio', { name: 'Option B' }).click();
   await expect(page.getByRole('radio', { name: 'Option B' })).toHaveAttribute('aria-checked', 'true');
 
-  // 4. Review
-  await page.getByRole('button', { name: 'Review icons' }).click();
+  // Review on the same screen
   await expect(page.getByText('16 icons · 0 approved')).toBeVisible();
   await page.getByRole('button', { name: 'Approve all' }).click();
   await expect(page.getByText('16 icons · 16 approved')).toBeVisible();
@@ -76,11 +77,17 @@ test('brand kit → icon set → zip, fully offline', async ({ page }) => {
   await expect(page.getByText('Earlier versions (1)')).toBeVisible();
   await page.getByRole('button', { name: 'Approve', exact: true }).click();
 
-  // 5. Export
-  await page.getByRole('button', { name: 'Export' }).click();
-  await expect(page.getByRole('heading', { name: 'Take it everywhere.' })).toBeVisible();
-  await expect(page.getByRole('button', { name: /^Web & apps/ })).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('button', { name: 'Customize files' }).click();
+  await page.getByRole('radiogroup', { name: 'Show as' }).getByRole('radio', { name: 'Buttons' }).click();
+  await expect(page.getByRole('img', { name: 'Cart button, true' })).toBeVisible();
+
+  // 3. Export: LabVIEW is the default; switch this set to web and design tools
+  await page.getByRole('button', { name: 'Continue to Export' }).click();
+  await expect(page.getByRole('heading', { name: 'Export', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^LabVIEW/ })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: /^LabVIEW/ }).click();
+  await page.getByRole('button', { name: /^Web & apps/ }).click();
+  await page.getByRole('button', { name: /^Design tools/ }).click();
+  await page.getByRole('button', { name: /^Files & formats/ }).click();
   await page.getByRole('switch', { name: 'SVG sprite' }).click();
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download zip' }).click()]);
   expect(download.suggestedFilename()).toBe('fernleaf-icons.zip');
@@ -103,7 +110,7 @@ test('brand kit → icon set → zip, fully offline', async ({ page }) => {
 
   // state survives a reload
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Take it everywhere.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Export', exact: true })).toBeVisible();
   await expect(page.getByText('fernleaf-icons.zip')).toBeVisible();
 });
 
@@ -112,6 +119,7 @@ test('asks to connect OpenRouter before spending, validates pasted keys', async 
   await page.addInitScript(() => localStorage.removeItem('aiconify.openrouter.key'));
   await mockOpenRouter(page);
   await page.goto('/');
+  await page.getByRole('button', { name: 'Brand kit' }).click();
   await page.getByLabel('Anything else we should know?').fill('A bakery');
   await page.getByRole('button', { name: 'Analyze brand' }).click();
   const dialog = page.getByRole('dialog', { name: 'Connect OpenRouter' });
@@ -135,6 +143,7 @@ test('shows API errors instead of failing silently', async ({ page }) => {
     r.fulfill({ status: 402, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: '{"error":{"message":"no credits"}}' }),
   );
   await page.goto('/');
+  await page.getByRole('button', { name: 'Brand kit' }).click();
   await page.getByLabel('Anything else we should know?').fill('A bakery');
   await page.getByRole('button', { name: 'Analyze brand' }).click();
   await expect(page.getByRole('alert')).toContainText('balance is too low');
@@ -168,10 +177,11 @@ test('finishes the OpenRouter sign-in it started, and ignores planted codes', as
 test('industrial set: HMI look, reference icons, LabVIEW and indicator exports', async ({ page }) => {
   const log = await mockOpenRouter(page);
   await page.goto('/');
+  await page.getByRole('button', { name: 'Brand kit' }).click();
   await page.getByLabel('Upload logo').setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: logoPng() });
   await page.getByRole('button', { name: 'Analyze brand' }).click();
   await expect(page.getByText('Brand analyzed.')).toBeVisible();
-  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Match an existing icon set' }).click();
 
   // Match an existing set: two SVG icons in one red, then take their color
   const ref = (d: string) => Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="${d}" fill="#c0392b"/></svg>`);
@@ -192,7 +202,7 @@ test('industrial set: HMI look, reference icons, LabVIEW and indicator exports',
   await expect(page.getByRole('radio', { name: 'HMI grey #4d4d4d' })).toHaveAttribute('aria-checked', 'true');
 
   // Generate: the prompt carries the HMI style and the uploaded icons go first as references
-  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Continue to Draw' }).click();
   await page.getByRole('button', { name: 'Generate icons' }).click();
   await expect(page.getByText('16 icons ready.')).toBeVisible({ timeout: 30_000 });
   const body = log.images[0].body;
@@ -201,22 +211,17 @@ test('industrial set: HMI look, reference icons, LabVIEW and indicator exports',
   expect(inputs.length).toBeGreaterThanOrEqual(2);
   expect(inputs[0]).toBe(valvePng);
 
-  await page.getByRole('button', { name: 'Review icons' }).click();
   await page.getByRole('button', { name: 'Approve all' }).click();
   await expect(page.getByText('16 icons · 16 approved')).toBeVisible();
 
-  // Export: pick LabVIEW and HMI, see them in place, then fine-tune
-  await page.getByRole('button', { name: 'Export' }).click();
-  await expect(page.getByRole('heading', { name: 'Take it everywhere.' })).toBeVisible();
-  await page.getByRole('button', { name: /^Web & apps/ }).click();
-  await page.getByRole('button', { name: /^Design tools/ }).click();
-  await page.getByRole('button', { name: /^LabVIEW/ }).click();
+  // Export: LabVIEW is on already; add HMI, see them in place, then fine-tune
+  await page.getByRole('button', { name: 'Continue to Export' }).click();
   await page.getByRole('button', { name: /^HMI \/ SCADA/ }).click();
   const place = page.locator('[aria-label="See it in place"]');
   await expect(place.getByLabel('LabVIEW front panel preview')).toBeVisible();
   await place.getByRole('radio', { name: 'HMI screen' }).click();
   await expect(place.getByRole('img', { name: /, Alarm$/ })).toBeVisible();
-  await page.getByRole('button', { name: 'Customize files' }).click();
+  await page.getByRole('button', { name: /^Files & formats/ }).click();
   await expect(page.getByRole('switch', { name: /^EMF/ })).toHaveAttribute('aria-checked', 'true');
   await expect(page.getByRole('switch', { name: /^Button states/ })).toHaveAttribute('aria-checked', 'true');
   await page.getByRole('radiogroup', { name: 'Button style' }).getByRole('radio', { name: 'Toggle' }).click();

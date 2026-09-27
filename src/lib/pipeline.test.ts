@@ -162,7 +162,7 @@ describe('export', () => {
         { id: 'b', name: 'Coffee cup', status: 'approved', svg, flags: [], history: [] },
       ],
     });
-    const o = { ...p.exportOptions, sprite: true, pngSizes: [24] };
+    const o = { ...applyTargets(p.exportOptions, ['web', 'design']), sprite: true, pngSizes: [24] };
     const planned = planFiles(p, o);
     expect(planned).toContain('svg/coffee-cup.svg');
     expect(planned).toContain('svg/coffee-cup-2.svg');
@@ -279,10 +279,10 @@ describe('reference icons', () => {
 });
 
 describe('export targets', () => {
-  it('match the defaults for web + design, and combine', () => {
+  it('default to LabVIEW, and combine', () => {
     const d = defaultProject().exportOptions;
-    expect(applyTargets(d, ['web', 'design'])).toEqual(d);
-    const lv = applyTargets(d, ['labview']);
+    expect(applyTargets(d, ['labview'])).toEqual(d);
+    const lv = d;
     expect(lv).toMatchObject({ png: true, emf: true, buttons: true, viIcons: true, svg: false, react: false, states: false, pngSizes: [16, 32], pngScales: [1, 2] });
     const both = applyTargets(d, ['labview', 'hmi']);
     expect(both).toMatchObject({ buttons: true, states: true, indicators: true, svg: true, pngSizes: [16, 24, 32, 48] });

@@ -1,3 +1,4 @@
+import { applyTargets } from './exporter';
 import { DEFAULT_MODEL } from './models';
 import { uid } from './pipeline';
 import type { Project } from './types';
@@ -21,7 +22,8 @@ export function defaultProject(): Project {
       corners: 'rounded',
       colorMode: 'brand',
       primary: '#1d1d1f',
-      accent: '#0071e3',
+      accent: '#2257e6',
+      parts: true,
     },
     iconNames: [],
     icons: [],
@@ -30,7 +32,7 @@ export function defaultProject(): Project {
     modelId: DEFAULT_MODEL,
     quality: 'low',
     candidates: 2,
-    exportOptions: {
+    exportOptions: applyTargets({
       targets: ['web', 'design'],
       svg: true,
       png: true,
@@ -56,7 +58,7 @@ export function defaultProject(): Project {
       indicatorKinds: ['round-led'],
       indicatorColors: ['#2fb344', '#d62d20'],
       indicatorSize: 32,
-    },
+    }, ['labview']),
     spent: 0,
     updatedAt: Date.now(),
   };
