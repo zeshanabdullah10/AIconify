@@ -23,8 +23,7 @@ test('brand kit → icon set → zip, fully offline', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Set up the icon set' })).toBeVisible();
 
-  // 1. Set up: the brand kit is optional and folded away
-  await page.getByRole('button', { name: 'Brand kit' }).click();
+  // 1. Set up: the brand comes first
   await page.getByLabel('Upload logo').setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: logoPng() });
   await expect(page.getByRole('img', { name: 'Your logo' })).toBeVisible();
   await page.getByLabel('Upload brand guidelines PDF').setInputFiles({ name: 'guidelines.pdf', mimeType: 'application/pdf', buffer: guidelinesPdf() });
@@ -35,6 +34,10 @@ test('brand kit → icon set → zip, fully offline', async ({ page }) => {
   // PDF text is read in the browser and only the text goes to the model
   expect(JSON.stringify(log.chat[0].body.messages)).toContain('Never use gradients');
   expect(JSON.stringify(log.chat[0].body.messages)).toContain('#1f4d3a');
+  // What was found shows up front; editing it is one click away
+  await expect(page.getByRole('list', { name: 'Brand colors' })).toContainText('#1f4d3a');
+  await expect(page.getByLabel('Your brand').getByText(/Organic/)).toBeVisible();
+  await page.getByRole('button', { name: /^Edit colors, personality and rules/ }).click();
   await expect(page.getByRole('button', { name: 'Remove Organic' })).toBeVisible();
   // the logo went to the vision model
   expect(JSON.stringify(log.chat[0].body.messages)).toContain('data:image/png;base64');
@@ -119,7 +122,6 @@ test('asks to connect OpenRouter before spending, validates pasted keys', async 
   await page.addInitScript(() => localStorage.removeItem('aiconify.openrouter.key'));
   await mockOpenRouter(page);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Brand kit' }).click();
   await page.getByLabel('Anything else we should know?').fill('A bakery');
   await page.getByRole('button', { name: 'Analyze brand' }).click();
   const dialog = page.getByRole('dialog', { name: 'Connect OpenRouter' });
@@ -143,7 +145,6 @@ test('shows API errors instead of failing silently', async ({ page }) => {
     r.fulfill({ status: 402, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: '{"error":{"message":"no credits"}}' }),
   );
   await page.goto('/');
-  await page.getByRole('button', { name: 'Brand kit' }).click();
   await page.getByLabel('Anything else we should know?').fill('A bakery');
   await page.getByRole('button', { name: 'Analyze brand' }).click();
   await expect(page.getByRole('alert')).toContainText('balance is too low');
@@ -177,7 +178,6 @@ test('finishes the OpenRouter sign-in it started, and ignores planted codes', as
 test('industrial set: HMI look, reference icons, LabVIEW and indicator exports', async ({ page }) => {
   const log = await mockOpenRouter(page);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Brand kit' }).click();
   await page.getByLabel('Upload logo').setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: logoPng() });
   await page.getByRole('button', { name: 'Analyze brand' }).click();
   await expect(page.getByText('Brand analyzed.')).toBeVisible();

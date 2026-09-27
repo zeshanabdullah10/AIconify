@@ -59,11 +59,12 @@ export function Card({ children, className, as: As = 'section', ...rest }: { chi
   );
 }
 
-export function CardHeader({ title, detail, action, marker }: { title: string; detail?: ReactNode; action?: ReactNode; marker?: string }) {
+export function CardHeader({ title, detail, action, marker, lead }: { title: string; detail?: ReactNode; action?: ReactNode; marker?: string; lead?: ReactNode }) {
   return (
     <div className="flex items-center gap-3 mb-3">
       <div className="flex-1 min-w-0">
         <h2 className="text-[15px] font-semibold flex items-center gap-2">
+          {lead}
           {marker ? <span aria-hidden="true" className="w-2 h-2 rounded-[2px] shrink-0" style={{ background: marker }} /> : null}
           {title}
         </h2>

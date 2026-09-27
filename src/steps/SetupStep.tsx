@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActionBar, Stat } from '../components/ActionBar';
-import { BrandKit, brandSummary } from '../components/BrandKit';
+import { BrandKit, StepNo } from '../components/BrandKit';
 import { Icon } from '../components/icons';
 import { Button, Card, CardHeader, ColorChips, DropZone, Row, Section, Segmented, Spinner, SvgView, Switch, cx } from '../components/ui';
 import { readFileAsDataUrl } from '../lib/codec';
@@ -30,7 +30,10 @@ export function SetupStep({ onNext }: { onNext: () => void }) {
     <>
       <div className="mb-5">
         <h1 className="text-[22px] font-semibold tracking-[-0.015em]">Set up the icon set</h1>
-        <p className="text-[14px] text-ink-2 mt-0.5">Choose the icons you need and one look for all of them. The preview shows them as LabVIEW buttons.</p>
+        <p className="text-[14px] text-ink-2 mt-0.5">Start from your brand, choose the icons you need, and lock one look for all of them. The preview shows them as LabVIEW buttons.</p>
+      </div>
+      <div className="mb-4">
+        <BrandKit />
       </div>
       <div className="grid lg:grid-cols-[minmax(0,1fr)_440px] gap-4 items-start">
         <div className="flex flex-col gap-4 min-w-0">
@@ -38,9 +41,6 @@ export function SetupStep({ onNext }: { onNext: () => void }) {
           <Card className="px-4 sm:px-5 py-1">
             <Section title="Match an existing icon set" summary={project.references.length ? `${project.references.length} icons` : 'Optional'} defaultOpen={project.references.length > 0}>
               <References />
-            </Section>
-            <Section title="Brand kit" summary={brandSummary(project.brand)} defaultOpen={project.brand.analyzed}>
-              <BrandKit />
             </Section>
             <Section title="Prompt" summary="Sent with every sheet">
               <p className="text-[12px] leading-relaxed font-mono text-ink-2 bg-raised rounded-[8px] p-3">{styleLock(s, project.brand)}</p>
@@ -106,7 +106,7 @@ function IconsPanel() {
     <Card className="p-4 sm:p-5">
       <CardHeader
         title="Icons in this set"
-        marker="var(--color-wire-num)"
+        lead={<StepNo n={2} />}
         detail={names.length ? `${names.length} icons · ${Math.ceil(names.length / MAX_PER_SHEET)} sheet${names.length > MAX_PER_SHEET ? 's' : ''} of up to 16` : 'Start from a pack, type your own, or ask for suggestions.'}
         action={
           names.length ? (
@@ -206,6 +206,11 @@ function LookPanel() {
 
   return (
     <Card as="aside" aria-label="Look" className="lg:sticky lg:top-[72px] overflow-hidden">
+      <div className="px-4 sm:px-5 py-3 border-b border-line">
+        <h2 className="text-[15px] font-semibold flex items-center gap-2">
+          <StepNo n={3} /> Look
+        </h2>
+      </div>
       <LookPreview />
       <div className="p-4 sm:p-5 flex flex-col gap-4">
         <div>

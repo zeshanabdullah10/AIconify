@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Icon } from './icons';
-import { Button, DropZone, Spinner, TextField, cx } from './ui';
+import { Button, Card, DropZone, Section, Spinner, TextField, cx } from './ui';
 import { logoForVision, readFileAsDataUrl } from '../lib/codec';
 import { isHex, luminance, normalizeHex } from '../lib/color';
 import { extractPalette } from '../lib/palette';
@@ -96,57 +96,123 @@ export function BrandKit() {
 
   const canAnalyze = !!(brand.logo || brand.guidelines || brand.notes.trim());
 
+  const found = brand.palette.length > 0 || brand.traits.length > 0;
+
   return (
-    <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-[96px_1fr] gap-3">
-        <DropZone accept="image/png,image/jpeg,image/webp,image/svg+xml" onFile={onLogo} label="Upload logo">
-          <div className="checker rounded-[9px] h-[96px] flex items-center justify-center p-2 m-px">
-            {reading === 'logo' ? (
-              <Spinner size={20} />
-            ) : brand.logo ? (
-              <img src={brand.logo.dataUrl} alt="Your logo" className="max-h-full max-w-full object-contain" />
-            ) : (
-              <span className="flex flex-col items-center gap-1 text-[11px] text-ink-2 text-center leading-tight">
-                <Icon name="upload" size={18} />
-                Logo
-              </span>
-            )}
+    <Card aria-label="Your brand" className="overflow-hidden">
+      <div className="grid lg:grid-cols-[200px_minmax(0,1fr)_minmax(0,1.1fr)]">
+        {/* Logo: the one input that does the most, so it gets the most room. */}
+        <div className="p-4 sm:p-5 lg:pr-0">
+          <DropZone accept="image/png,image/jpeg,image/webp,image/svg+xml" onFile={onLogo} label="Upload logo">
+            <div className="checker rounded-[9px] h-40 lg:h-auto lg:aspect-square w-full flex items-center justify-center p-4 m-px">
+              {reading === 'logo' ? (
+                <Spinner size={22} />
+              ) : brand.logo ? (
+                <img src={brand.logo.dataUrl} alt="Your logo" className="max-h-full max-w-full object-contain" />
+              ) : (
+                <span className="flex flex-col items-center gap-1.5 text-[12px] text-[#5b616b] text-center leading-snug">
+                  <span className="w-10 h-10 rounded-[10px] bg-white shadow-[inset_0_0_0_1px_rgb(20_28_40/0.12)] flex items-center justify-center text-[#2257e6]">
+                    <Icon name="upload" size={20} />
+                  </span>
+                  <span className="font-semibold text-[#15181d]">Drop your logo</span>
+                  PNG, SVG, JPG
+                </span>
+              )}
+            </div>
+          </DropZone>
+        </div>
+
+        <div className="p-4 sm:p-5 flex flex-col gap-3 min-w-0">
+          <div>
+            <h2 className="text-[16px] font-semibold flex items-center gap-2">
+              <StepNo n={1} /> Your brand
+            </h2>
+            <p className="text-[13px] text-ink-2 mt-1">Add your logo and guidelines. Colors, personality and rules are read from them, and every icon is drawn to match.</p>
           </div>
-        </DropZone>
-        <div className="flex flex-col gap-2 min-w-0">
+          <TextField label="Brand name" value={brand.name} onChange={(v) => setBrand((b) => ({ ...b, name: v }))} placeholder="e.g. Fernleaf Instruments" />
           <DropZone accept="application/pdf" onFile={onPdf} label="Upload brand guidelines PDF">
             <div className="flex items-center gap-2.5 px-3 h-11">
               {reading === 'pdf' ? <Spinner /> : <Icon name="file" size={17} className="text-ink-2 shrink-0" />}
               <span className="flex-1 min-w-0">
-                <span className="block text-[13px] font-medium truncate">{brand.guidelines ? brand.guidelines.fileName : 'Guidelines PDF'}</span>
+                <span className="block text-[13px] font-medium truncate">{brand.guidelines ? brand.guidelines.fileName : 'Brand guidelines (PDF, optional)'}</span>
                 <span className="block text-[11px] text-ink-3 truncate">
-                  {brand.guidelines ? `${brand.guidelines.pages} pages · ${brand.guidelines.text.length.toLocaleString()} characters read` : 'Read in your browser'}
+                  {brand.guidelines ? `${brand.guidelines.pages} pages · ${brand.guidelines.text.length.toLocaleString()} characters read` : 'Colors, type, do and don’t rules. Read in your browser.'}
                 </span>
               </span>
             </div>
           </DropZone>
-          <Button variant={brand.analyzed ? 'secondary' : 'primary'} size="sm" icon="sparkles" busy={analyzing} disabled={!canAnalyze} onClick={analyze}>
-            {brand.analyzed ? 'Analyze again' : 'Analyze brand'}
-          </Button>
+          <TextField
+            label="Anything else we should know?"
+            multiline
+            rows={2}
+            value={brand.notes}
+            onChange={(v) => setBrand((b) => ({ ...b, notes: v }))}
+            placeholder="Who uses the app, where it runs, the feeling you want."
+          />
+        </div>
+
+        <div className="p-4 sm:p-5 flex flex-col gap-3 min-w-0 bg-raised lg:border-l border-t lg:border-t-0 border-line">
+          <div className="flex items-center gap-2">
+            <h3 className="flex-1 label-caps">What we found</h3>
+            {brand.analyzed ? <span className="text-[11px] text-success font-medium inline-flex items-center gap-1"><Icon name="check" size={12} strokeWidth={2.6} /> Analyzed</span> : null}
+          </div>
+          {found ? (
+            <>
+              <ul aria-label="Brand colors" className="flex flex-wrap gap-2">
+                {brand.palette.map((c, i) => (
+                  <li key={i} className="flex items-center gap-1.5 h-8 pl-1 pr-2.5 rounded-[8px] bg-card shadow-[inset_0_0_0_1px_var(--color-line)] text-[12px]">
+                    <span className="w-6 h-6 rounded-[6px] shadow-[inset_0_0_0_1px_rgb(0_0_0/0.14)]" style={{ background: c.hex }} />
+                    <span className="font-medium">{c.role}</span>
+                    <span className="font-mono text-ink-3 uppercase">{c.hex}</span>
+                  </li>
+                ))}
+              </ul>
+              {brand.traits.length ? (
+                <p className="text-[13px] text-ink-2">
+                  <span className="text-ink font-medium">Personality: </span>
+                  {brand.traits.join(', ')}
+                </p>
+              ) : null}
+              {brand.dos.length || brand.donts.length ? (
+                <p className="text-[13px] text-ink-2">
+                  {brand.dos.length ? <><span className="text-ink font-medium">Do: </span>{brand.dos.slice(0, 3).join('; ')}. </> : null}
+                  {brand.donts.length ? <><span className="text-ink font-medium">Don’t: </span>{brand.donts.slice(0, 3).join('; ')}.</> : null}
+                </p>
+              ) : null}
+            </>
+          ) : (
+            <p className="text-[13px] text-ink-3">Nothing yet. A logo gives the colors right away; Analyze adds personality, rules and suggested icons.</p>
+          )}
+          <div className="mt-auto flex flex-col gap-1.5">
+            <Button variant={brand.analyzed ? 'secondary' : 'primary'} icon="sparkles" busy={analyzing} disabled={!canAnalyze} onClick={analyze}>
+              {brand.analyzed ? 'Analyze again' : 'Analyze brand'}
+            </Button>
+            <p className="text-[11px] text-ink-3 text-center">DeepSeek V4.1 Flash reads it for well under a cent. No brand? Skip this and pick colors under Look.</p>
+          </div>
         </div>
       </div>
-      <TextField
-        label="Anything else we should know?"
-        multiline
-        rows={2}
-        value={brand.notes}
-        onChange={(v) => setBrand((b) => ({ ...b, notes: v }))}
-        placeholder="Who uses the app, where it runs, the feeling you want."
-      />
-      <PaletteEditor palette={brand.palette} onChange={(palette) => update((p) => ({ ...p, brand: { ...p.brand, palette }, style: applyPaletteToStyle(p, palette) }))} />
-      <ListEditor title="Personality" items={brand.traits} placeholder="Add a trait, e.g. precise" onChange={(traits) => setBrand((b) => ({ ...b, traits }))} chips />
-      <div className="grid grid-cols-2 gap-4">
-        <ListEditor title="Do" items={brand.dos} placeholder="Add a rule" onChange={(dos) => setBrand((b) => ({ ...b, dos }))} />
-        <ListEditor title="Don’t" items={brand.donts} placeholder="Add a rule" onChange={(donts) => setBrand((b) => ({ ...b, donts }))} />
+
+      <div className="px-4 sm:px-5 border-t border-line">
+        <Section title="Edit colors, personality and rules" summary={found ? `${brand.palette.length} colors · ${brand.traits.length} traits · ${brand.dos.length + brand.donts.length} rules` : 'Add them by hand'}>
+          <div className="grid md:grid-cols-2 gap-5">
+            <PaletteEditor palette={brand.palette} onChange={(palette) => update((p) => ({ ...p, brand: { ...p.brand, palette }, style: applyPaletteToStyle(p, palette) }))} />
+            <div className="flex flex-col gap-4">
+              <ListEditor title="Personality" items={brand.traits} placeholder="Add a trait, e.g. precise" onChange={(traits) => setBrand((b) => ({ ...b, traits }))} chips />
+              <div className="grid grid-cols-2 gap-4">
+                <ListEditor title="Do" items={brand.dos} placeholder="Add a rule" onChange={(dos) => setBrand((b) => ({ ...b, dos }))} />
+                <ListEditor title="Don’t" items={brand.donts} placeholder="Add a rule" onChange={(donts) => setBrand((b) => ({ ...b, donts }))} />
+              </div>
+            </div>
+          </div>
+        </Section>
       </div>
-      {!brand.analyzed ? <p className="text-[12px] text-ink-3">Analyze uses DeepSeek V4.1 Flash, well under a cent.</p> : null}
-    </div>
+    </Card>
   );
+}
+
+/** The number of a part of the Set up screen. */
+export function StepNo({ n }: { n: number }) {
+  return <span className="w-6 h-6 rounded-[7px] bg-ink text-canvas text-[12px] font-semibold flex items-center justify-center tabular-nums shrink-0">{n}</span>;
 }
 
 function PaletteEditor({ palette, onChange }: { palette: PaletteColor[]; onChange: (p: PaletteColor[]) => void }) {
@@ -230,9 +296,4 @@ function ListEditor({ title, items, onChange, placeholder, chips }: { title: str
   );
 }
 
-/** One line for a closed Brand kit section. */
-export function brandSummary(brand: Kit): string {
-  const bits = [brand.logo ? 'logo' : '', brand.guidelines ? 'guidelines' : '', brand.palette.length ? `${brand.palette.length} colors` : ''].filter(Boolean);
-  return bits.length ? bits.join(' · ') : 'Optional';
-}
 

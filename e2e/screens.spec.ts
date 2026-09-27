@@ -20,7 +20,6 @@ for (const scheme of ['light', 'dark'] as const) {
     // Set up: a LabVIEW pack, then the brand kit
     await page.getByRole('button', { name: 'Add Operator panel pack' }).click();
     await shot('1-setup');
-    await page.getByRole('button', { name: 'Brand kit' }).click();
     await page.getByLabel('Upload logo').setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: logoPng() });
     await page.getByRole('button', { name: 'Analyze brand' }).click();
     await page.getByText('Brand analyzed.').waitFor();
