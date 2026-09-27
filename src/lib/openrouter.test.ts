@@ -1,4 +1,4 @@
-import { createClient, createPkce, OpenRouterError } from './openrouter';
+import { authUrl, createClient, createPkce, exchangeCode, OpenRouterError } from './openrouter';
 
 function mockFetch(status: number, body: unknown) {
   const calls: { url: string; init: RequestInit }[] = [];
@@ -46,5 +46,24 @@ describe('PKCE', () => {
     const { verifier, challenge } = await createPkce();
     expect(verifier).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(challenge).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  });
+
+  it('exchanges a code with the verifier this tab stored, once', async () => {
+    const url = new URL(await authUrl('https://app.test/'));
+    expect(url.searchParams.get('code_challenge_method')).toBe('S256');
+    const { f, calls } = mockFetch(200, { key: 'sk-or-v1-abc' });
+    await expect(exchangeCode('c0de', f)).resolves.toBe('sk-or-v1-abc');
+    const body = JSON.parse(String(calls[0].init.body));
+    expect(body).toMatchObject({ code: 'c0de', code_challenge_method: 'S256' });
+    expect(body.code_verifier).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    // replaying the same link fails: the verifier is gone
+    await expect(exchangeCode('c0de', f)).rejects.toThrow(/not started from this tab/);
+  });
+
+  it('refuses a code this tab never asked for', async () => {
+    sessionStorage.clear();
+    const { f, calls } = mockFetch(200, { key: 'attacker-key' });
+    await expect(exchangeCode('planted', f)).rejects.toThrow(/not started from this tab/);
+    expect(calls).toHaveLength(0);
   });
 });

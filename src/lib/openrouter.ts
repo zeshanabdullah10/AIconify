@@ -171,15 +171,18 @@ export async function authUrl(callbackUrl: string): Promise<string> {
 }
 
 export async function exchangeCode(code: string, f: typeof fetch = fetch): Promise<string> {
-  const verifier = sessionStorage.getItem(VERIFIER_STORAGE) ?? undefined;
+  // Only finish a sign-in this tab started. Without the verifier, a crafted ?code= link could log the
+  // user into someone else's key (and send their logo and prompts to that account).
+  const verifier = sessionStorage.getItem(VERIFIER_STORAGE);
+  sessionStorage.removeItem(VERIFIER_STORAGE);
+  if (!verifier) throw new OpenRouterError('This sign-in link was not started from this tab. Click Connect to try again.', 400);
   const res = await f(`${OPENROUTER_API}/auth/keys`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code, code_verifier: verifier, code_challenge_method: verifier ? 'S256' : undefined }),
+    body: JSON.stringify({ code, code_verifier: verifier, code_challenge_method: 'S256' }),
   });
   if (!res.ok) throw await readError(res);
   const body = await res.json();
-  sessionStorage.removeItem(VERIFIER_STORAGE);
   if (!body?.key) throw new OpenRouterError('OpenRouter did not return a key.', 502);
   return body.key as string;
 }

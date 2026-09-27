@@ -94,13 +94,52 @@ export function variationsPrompt(name: string, description: string | undefined, 
 
 /* ---------- text model (DeepSeek V4.1 Flash) ---------- */
 
+/** Every balanced top-level {...} in the text, skipping braces inside strings. */
+function jsonObjects(text: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (ch === '\\') i++;
+      else if (ch === '"') inString = false;
+    } else if (ch === '"') {
+      if (depth > 0) inString = true;
+    } else if (ch === '{') {
+      if (depth++ === 0) start = i;
+    } else if (ch === '}' && depth > 0 && --depth === 0) {
+      out.push(text.slice(start, i + 1));
+    }
+  }
+  return out;
+}
+
+/**
+ * Pull a JSON object out of a model reply. Models sometimes wrap it in prose or a code fence, or split
+ * one answer into several objects; those are merged, in order.
+ */
 export function parseJson<T = unknown>(text: string): T {
   const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(text);
   const body = fenced ? fenced[1] : text;
-  const start = body.indexOf('{');
-  const end = body.lastIndexOf('}');
-  if (start < 0 || end <= start) throw new Error('The model did not return JSON.');
-  return JSON.parse(body.slice(start, end + 1)) as T;
+  const parsed: Record<string, unknown>[] = [];
+  for (const chunk of jsonObjects(body)) {
+    try {
+      const v = JSON.parse(chunk);
+      if (v && typeof v === 'object' && !Array.isArray(v)) parsed.push(v);
+    } catch {
+      /* not valid JSON on its own; try the rest */
+    }
+  }
+  if (parsed.length === 0) throw new Error('The model did not return valid JSON. Try again.');
+  return (parsed.length === 1 ? parsed[0] : Object.assign({}, ...parsed)) as T;
+}
+
+/** "coffee-bean" → "Coffee bean": models often answer with slugs, the UI shows names. */
+export function iconName(raw: string): string {
+  const s = raw.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return s ? s[0].toUpperCase() + s.slice(1) : s;
 }
 
 const strings = (v: unknown, max = 12): string[] =>
@@ -110,6 +149,16 @@ const strings = (v: unknown, max = 12): string[] =>
         .map((x) => x.trim().slice(0, 80))
         .slice(0, max)
     : [];
+
+const dedupe = (list: string[]): string[] => {
+  const seen = new Set<string>();
+  return list.filter((x) => {
+    const k = x.toLowerCase();
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+};
 
 export interface BrandAnalysis {
   name?: string;
@@ -135,7 +184,7 @@ export function brandMessages(input: {
     '"name" (brand name), "palette" (array of {"role","hex"}; roles like Primary, Accent, Warm, Surface, Ink; 2-6 entries; prefer the measured colours below),',
     '"traits" (3-6 single adjectives), "dos" (up to 4 short visual rules), "donts" (up to 4 short visual rules),',
     '"fonts" ({"display","body"} if known), "style" ({"style": one of outline|filled|duotone|badge, "corners": rounded|sharp, "strokeWeight": 1.5|2|2.5}),',
-    '"suggestedIcons" (12-16 short icon names this brand most likely needs for its app or site).',
+    '"suggestedIcons" (12-16 short, human-readable icon names like "Coffee cup", this brand most likely needs for its app or site).',
     `Colours measured from the logo pixels: ${input.logoColors.join(', ') || 'none'}.`,
     `Colours listed in the guidelines: ${input.documentColors.join(', ') || 'none'}.`,
     input.notes ? `Notes from the user: ${input.notes.slice(0, 1000)}` : '',
@@ -181,7 +230,7 @@ export function parseBrand(text: string): BrandAnalysis {
       corners: style.corners === 'sharp' ? 'sharp' : style.corners === 'rounded' ? 'rounded' : undefined,
       strokeWeight: [1.5, 2, 2.5].includes(Number(style.strokeWeight)) ? Number(style.strokeWeight) : undefined,
     },
-    suggestedIcons: strings(raw.suggestedIcons, 24),
+    suggestedIcons: dedupe(strings(raw.suggestedIcons, 24).map(iconName)),
   };
 }
 
@@ -227,5 +276,5 @@ export function suggestMessages(brand: BrandKit, existing: string[], count: numb
 export function parseSuggestions(text: string, existing: string[]): string[] {
   const raw = parseJson<{ icons?: unknown }>(text);
   const lower = new Set(existing.map((e) => e.toLowerCase()));
-  return strings(raw.icons, 24).filter((n) => !lower.has(n.toLowerCase()));
+  return dedupe(strings(raw.icons, 24).map(iconName)).filter((n) => !lower.has(n.toLowerCase()));
 }

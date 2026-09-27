@@ -249,7 +249,16 @@ function Inspector({
 
   const rename = () => {
     const n = name.trim();
-    if (n && n !== icon.name) update((p) => ({ ...p, icons: p.icons.map((i) => (i.id === icon.id ? { ...i, name: n } : i)) }));
+    if (!n) return setName(icon.name);
+    if (n === icon.name) return;
+    // Keep the set's name list in step, or Generate would redraw the old name as a new icon.
+    update((p) => ({
+      ...p,
+      icons: p.icons.map((i) => (i.id === icon.id ? { ...i, name: n } : i)),
+      iconNames: p.iconNames.some((x) => x.toLowerCase() === n.toLowerCase())
+        ? p.iconNames.filter((x) => x !== icon.name)
+        : p.iconNames.map((x) => (x === icon.name ? n : x)),
+    }));
   };
 
   return (

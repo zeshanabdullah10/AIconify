@@ -66,16 +66,17 @@ export async function buildZip(
       2,
     ) + '\n',
   );
-  zip.file('README.md', readme(project, files, comps, o));
+  zip.file('README.md', readme(project, icons, files, comps, o));
   return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
 }
 
-function readme(project: Project, files: string[], comps: string[], o: ExportOptions): string {
+function readme(project: Project, icons: IconItem[], files: string[], comps: string[], o: ExportOptions): string {
+  const example = (icons[0]?.name ?? 'Icon').replace(/["{}<>]/g, '');
   const title = project.brand.name ? `${project.brand.name} icons` : 'Icon set';
   const lines = [`# ${title}`, '', `${files.length} icons, 24×24 viewBox. Generated with AIconify.`, ''];
   if (o.svg) lines.push('## SVG', '', '```html', `<img src="svg/${files[0] ?? 'icon'}.svg" width="24" height="24" alt="">`, '```', '');
   if (o.react)
-    lines.push('## React', '', 'Copy `react/` into your project.', '', '```tsx', `import { ${comps[0] ?? 'Icon'} } from './react';`, '', `<${comps[0] ?? 'Icon'} size={24} title="${project.icons[0]?.name ?? 'Icon'}" />`, '```', '');
+    lines.push('## React', '', 'Copy `react/` into your project.', '', '```tsx', `import { ${comps[0] ?? 'Icon'} } from './react';`, '', `<${comps[0] ?? 'Icon'} size={24} title="${example}" />`, '```', '');
   if (o.sprite)
     lines.push('## Sprite', '', 'Inline `sprite.svg` once in your page, then:', '', '```html', `<svg width="24" height="24"><use href="#${files[0] ?? 'icon'}"/></svg>`, '```', '');
   return lines.join('\n');

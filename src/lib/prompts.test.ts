@@ -1,4 +1,4 @@
-import { parseBrand, parseBrief, parseJson, parseSuggestions, sheetPrompt, styleLock } from './prompts';
+import { iconName, parseBrand, parseBrief, parseJson, parseSuggestions, sheetPrompt, styleLock } from './prompts';
 import type { BrandKit, StyleLock } from './types';
 
 const brand: BrandKit = {
@@ -43,6 +43,21 @@ describe('parsers', () => {
   it('reads fenced JSON', () => {
     expect(parseJson('Sure!\n```json\n{"a":1}\n```')).toEqual({ a: 1 });
     expect(() => parseJson('no json')).toThrow();
+  });
+
+  it('survives trailing text, extra objects and braces inside strings', () => {
+    // The live smoke run once failed on a reply shaped like this.
+    expect(parseJson('{"name":"Fernleaf Co."}\n{"traits":["Warm"]}')).toEqual({ name: 'Fernleaf Co.', traits: ['Warm'] });
+    expect(parseJson('{"a":"x}y"} and that is all}')).toEqual({ a: 'x}y' });
+    expect(parseJson('{"a":1,} {"b":2}')).toEqual({ b: 2 });
+    expect(parseJson('{"a":"say \\"hi\\" {"}')).toEqual({ a: 'say "hi" {' });
+    expect(() => parseJson('{"a": ')).toThrow(/valid JSON/);
+  });
+
+  it('turns slugs into readable icon names', () => {
+    expect(iconName('coffee-bean')).toBe('Coffee bean');
+    expect(iconName('store_locator ')).toBe('Store locator');
+    expect(parseSuggestions('{"icons":["gift-card","Gift card","Map"]}', ['map'])).toEqual(['Gift card']);
   });
 
   it('validates brand analysis', () => {

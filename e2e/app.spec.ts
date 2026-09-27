@@ -1,10 +1,21 @@
 import { expect, test } from '@playwright/test';
 import JSZip from 'jszip';
 import { readFile } from 'node:fs/promises';
-import { logoPng, mockOpenRouter } from './mock';
+import { guidelinesPdf, logoPng, mockOpenRouter } from './mock';
+
+const problems = new WeakMap<object, string[]>();
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('aiconify.openrouter.key', 'sk-or-test'));
+  // The production build ships a Content-Security-Policy; any violation or uncaught error fails the test.
+  const list: string[] = [];
+  problems.set(page, list);
+  page.on('pageerror', (e) => list.push(`pageerror: ${e.message}`));
+  page.on('console', (m) => /Content Security Policy|Refused to/i.test(m.text()) && list.push(`csp: ${m.text()}`));
+});
+
+test.afterEach(async ({ page }) => {
+  expect(problems.get(page) ?? []).toEqual([]);
 });
 
 test('brand kit → icon set → zip, fully offline', async ({ page }) => {
@@ -15,9 +26,14 @@ test('brand kit → icon set → zip, fully offline', async ({ page }) => {
   // 1. Brand
   await page.getByLabel('Upload logo').setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: logoPng() });
   await expect(page.getByRole('img', { name: 'Your logo' })).toBeVisible();
+  await page.getByLabel('Upload brand guidelines PDF').setInputFiles({ name: 'guidelines.pdf', mimeType: 'application/pdf', buffer: guidelinesPdf() });
+  await expect(page.getByText(/1 pages · \d+ characters read/)).toBeVisible();
   await page.getByRole('button', { name: 'Analyze brand' }).click();
   await expect(page.getByText('Brand analyzed.')).toBeVisible();
   await expect(page.getByLabel('Brand name')).toHaveValue('Fernleaf');
+  // PDF text is read in the browser and only the text goes to the model
+  expect(JSON.stringify(log.chat[0].body.messages)).toContain('Never use gradients');
+  expect(JSON.stringify(log.chat[0].body.messages)).toContain('#1f4d3a');
   await expect(page.getByRole('button', { name: 'Remove Organic' })).toBeVisible();
   // the logo went to the vision model
   expect(JSON.stringify(log.chat[0].body.messages)).toContain('data:image/png;base64');
@@ -119,4 +135,29 @@ test('shows API errors instead of failing silently', async ({ page }) => {
   await page.getByLabel('Anything else we should know?').fill('A bakery');
   await page.getByRole('button', { name: 'Analyze brand' }).click();
   await expect(page.getByRole('alert')).toContainText('balance is too low');
+});
+
+test('finishes the OpenRouter sign-in it started, and ignores planted codes', async ({ page }) => {
+  await page.addInitScript(() => localStorage.removeItem('aiconify.openrouter.key'));
+  const log = await mockOpenRouter(page);
+
+  // A link with a code this tab never asked for must not connect anything.
+  await page.goto('/?code=planted');
+  await expect(page.getByRole('alert')).toContainText('not started from this tab');
+  await expect(page.getByRole('button', { name: 'Connect OpenRouter' })).toBeVisible();
+  expect(log.auth).toHaveLength(0);
+  expect(page.url()).not.toContain('code=');
+
+  // The real flow: Connect stores a PKCE verifier and sends us to OpenRouter, which redirects back.
+  await page.route('https://openrouter.ai/auth?**', (r) => {
+    const back = new URL(new URL(r.request().url()).searchParams.get('callback_url')!);
+    back.searchParams.set('code', 'good');
+    return r.fulfill({ status: 302, headers: { location: back.toString() } });
+  });
+  await page.getByRole('button', { name: 'Connect OpenRouter' }).click();
+  await page.getByRole('button', { name: 'Connect with OpenRouter' }).click();
+  await expect(page.getByText('OpenRouter connected.')).toBeVisible();
+  expect(log.auth).toHaveLength(1);
+  expect(log.auth[0].body).toMatchObject({ code: 'good', code_challenge_method: 'S256' });
+  expect(await page.evaluate(() => localStorage.getItem('aiconify.openrouter.key'))).toBe('sk-or-from-oauth');
 });

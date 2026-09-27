@@ -42,7 +42,7 @@ npm run e2e        # full flow in Chromium (desktop + mobile), OpenRouter mocked
 npm run build
 ```
 
-`npm run e2e` never calls the real API. To test against the real API (about $0.03–0.08):
+`npm run e2e` never calls the real API. If Playwright's own Chromium isn't installed, point it at another build with `PW_CHROMIUM_PATH=/path/to/chromium npm run e2e`. To test against the real API (about $0.03–0.08):
 
 ```bash
 OPENROUTER_API_KEY=sk-or-... npm run smoke
@@ -75,6 +75,9 @@ Pushing to `main` runs `.github/workflows/deploy.yml`, which builds with the rig
 - Your OpenRouter key is stored in `localStorage` and sent only to `openrouter.ai`.
 - Projects (logo, sheets, icons) are saved in IndexedDB in your browser.
 - PDFs are read locally; only the extracted text is sent to the text model.
+- Production builds ship a Content-Security-Policy that only allows network requests to `openrouter.ai`.
+
+See [SECURITY.md](SECURITY.md) for the security model and how to report a vulnerability.
 
 ## License
 

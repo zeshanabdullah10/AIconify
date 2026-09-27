@@ -43,3 +43,14 @@ Per model, the full sheet (briefs + image) cost: gpt-image-2.5-flare **$0.0079**
 | 8 | Gift | ok | `missing` (no SVG) |
 
 Note: `openai-gpt-image-1-mini-5-Leaf.svg` was written but is an empty `<svg>` (66 bytes, no paths), so in practice gpt-image-1-mini produced 6 usable icons out of 9.
+
+## Re-run after the JSON parsing fix
+
+After `parseJson` was changed to tolerate several JSON objects or trailing text in one reply, and brand analysis gained one retry, `npm run smoke` passed **3/3** (50.7 s, total **$0.0125**). Brand analysis succeeded in one call ($0.00037). Files from this run are not committed; the files above are from the first run.
+
+| Step | Brief (text) | Sheet image | Total |
+| --- | --- | --- | --- |
+| gpt-image-2.5-flare | 0.000367 | 0.007905 | 0.0083 |
+| gpt-image-1-mini | 0.000853 | 0.002988 | 0.0038 |
+
+Flags: gpt-image-2.5-flare traced 9/9, with Calendar flagged `fragmented`. gpt-image-1-mini traced 9/9 with no flags.

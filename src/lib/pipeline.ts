@@ -61,12 +61,18 @@ export async function processSheet(
   const cells = sliceSheet(sheet, { cols, rows, size: CROP }).slice(0, count);
   const palette = iconPalette(style);
   return Promise.all(
-    cells.map(async (cell) => ({
-      png: await codec.encode(cell.image),
-      svg: cell.flags.includes('missing') ? '' : vectorize(cell.image, { palette }),
-      flags: cell.flags,
-    })),
+    cells.map(async (cell) => {
+      const svg = cell.flags.includes('missing') ? '' : traced(vectorize(cell.image, { palette }));
+      // A crop that traced to nothing (only specks) is as good as an empty cell.
+      const flags = svg || cell.flags.includes('missing') ? cell.flags : ['missing', ...cell.flags];
+      return { png: await codec.encode(cell.image), svg, flags };
+    }),
   );
+}
+
+/** The SVG, or '' when tracing produced no shapes. */
+function traced(svg: string): string {
+  return svg.includes('<path') ? svg : '';
 }
 
 async function writeBriefs(deps: Deps, names: string[], brand: BrandKit, lock: string): Promise<Record<string, string>> {
@@ -210,7 +216,8 @@ export async function retraceAll(codec: Codec, project: Project): Promise<IconIt
     project.icons.map(async (icon) => {
       if (!icon.png) return icon;
       const img = await codec.decode(icon.png);
-      return { ...icon, svg: vectorize(img, { palette }) };
+      const svg = traced(vectorize(img, { palette }));
+      return svg ? { ...icon, svg } : { ...icon, svg: undefined, status: 'flagged', flags: [...new Set(['missing', ...icon.flags])] };
     }),
   );
 }
@@ -238,18 +245,24 @@ export async function analyzeBrand(deps: Deps, brand: BrandKit, logoForModel?: s
     measured = extractPalette(img, 6).map((s) => s.hex);
   }
   const documentColors = brand.guidelines ? findHexColors(brand.guidelines.text).slice(0, 12) : [];
-  const { text, cost } = await deps.client.chat(
-    brandMessages({
-      logoDataUrl: logoForModel,
-      guidelinesText: brand.guidelines?.text,
-      notes: brand.notes,
-      logoColors: measured,
-      documentColors,
-    }),
-    { model: TEXT_MODEL, json: true, maxTokens: 1500, signal: deps.signal },
-  );
-  deps.onCost(cost ?? 0.001);
-  const analysis = parseBrand(text);
+  const messages = brandMessages({
+    logoDataUrl: logoForModel,
+    guidelinesText: brand.guidelines?.text,
+    notes: brand.notes,
+    logoColors: measured,
+    documentColors,
+  });
+  let analysis: BrandAnalysis | undefined;
+  // The text model occasionally returns malformed JSON; one retry costs well under a cent.
+  for (let attempt = 0; !analysis; attempt++) {
+    const { text, cost } = await deps.client.chat(messages, { model: TEXT_MODEL, json: true, maxTokens: 1500, signal: deps.signal });
+    deps.onCost(cost ?? 0.001);
+    try {
+      analysis = parseBrand(text);
+    } catch (e) {
+      if (attempt >= 1) throw e;
+    }
+  }
   return { brand: mergeBrand(brand, analysis, measured), analysis };
 }
 

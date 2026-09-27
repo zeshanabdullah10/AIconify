@@ -1,8 +1,9 @@
 import JSZip from 'jszip';
-import { makeSheet, nodeCodec, toPngDataUrl } from '../test/fixtures';
+import { GREEN, fillRect, makeSheet, nodeCodec, toPngDataUrl } from '../test/fixtures';
 import { buildZip, planFiles } from './exporter';
 import type { Client, ImageRequest } from './openrouter';
-import { analyzeBrand, editIcon, generateIcons, iconPalette, iconVariations, type Deps } from './pipeline';
+import { analyzeBrand, editIcon, generateIcons, iconPalette, iconVariations, retraceAll, type Deps } from './pipeline';
+import { createRaster } from './raster';
 import { defaultProject } from './project';
 import type { Project } from './types';
 
@@ -111,6 +112,36 @@ describe('analyzeBrand', () => {
   });
 });
 
+describe('analyzeBrand retries', () => {
+  it('asks once more when the reply is not JSON, and counts both calls', async () => {
+    const replies = ['{"name": "Fern', '{"name":"Fernleaf","palette":[{"role":"Primary","hex":"#1f4d3a"}]}'];
+    let calls = 0;
+    const client = { ...fakeClient().client, chat: async () => ({ text: replies[calls++], cost: 0.001 }) };
+    let spent = 0;
+    const { brand } = await analyzeBrand({ client, codec: nodeCodec, onCost: (c) => (spent += c) }, project().brand);
+    expect(calls).toBe(2);
+    expect(brand.name).toBe('Fernleaf');
+    expect(spent).toBeCloseTo(0.002, 6);
+  });
+
+  it('gives up after the retry', async () => {
+    const client = { ...fakeClient().client, chat: async () => ({ text: 'sorry', cost: 0.001 }) };
+    await expect(analyzeBrand({ client, codec: nodeCodec, onCost: () => {} }, project().brand)).rejects.toThrow(/valid JSON/);
+  });
+});
+
+describe('retraceAll', () => {
+  it('flags icons whose crop traces to nothing instead of exporting an empty SVG', async () => {
+    const speck = createRaster(256, 256);
+    fillRect(speck, 128, 128, 1, 1, GREEN);
+    const p = project({ icons: [{ id: 'a', name: 'Leaf', status: 'approved', svg: '<svg/>', png: toPngDataUrl(speck), flags: [], history: [] }] });
+    const [icon] = await retraceAll(nodeCodec, p);
+    expect(icon.svg).toBeUndefined();
+    expect(icon.status).toBe('flagged');
+    expect(icon.flags).toContain('missing');
+  });
+});
+
 describe('iconPalette', () => {
   it('follows the style', () => {
     const s = project().style;
@@ -125,9 +156,9 @@ describe('export', () => {
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#1f4d3a" d="M0 0L24 24Z"/></svg>';
     const p = project({
       icons: [
+        { id: 'c', name: 'Missing', status: 'draft', flags: [], history: [] },
         { id: 'a', name: 'Coffee cup', status: 'approved', svg, flags: [], history: [] },
         { id: 'b', name: 'Coffee cup', status: 'approved', svg, flags: [], history: [] },
-        { id: 'c', name: 'Missing', status: 'draft', flags: [], history: [] },
       ],
     });
     const o = { ...p.exportOptions, sprite: true, pngSizes: [24] };
@@ -143,6 +174,8 @@ describe('export', () => {
     const tsx = await zip.file('react/CoffeeCup.tsx')!.async('string');
     expect(tsx).toContain('fill="currentColor"');
     expect(tsx).toContain('export function CoffeeCup');
+    const readme = await zip.file('README.md')!.async('string');
+    expect(readme).toContain('title="Coffee cup"');
     const sprite = await zip.file('sprite.svg')!.async('string');
     expect(sprite).toContain('<symbol id="coffee-cup"');
   });
