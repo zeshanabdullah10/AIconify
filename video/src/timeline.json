@@ -1,0 +1,18 @@
+{
+  "fps": 60,
+  "bpm": 120,
+  "scenes": [
+    { "id": "intro", "from": 0, "duration": 300 },
+    { "id": "brand", "from": 300, "duration": 480 },
+    { "id": "sheet", "from": 780, "duration": 600 },
+    { "id": "styles", "from": 1380, "duration": 480 },
+    { "id": "labview", "from": 1860, "duration": 840 },
+    { "id": "hmi", "from": 2700, "duration": 480 },
+    { "id": "export", "from": 3180, "duration": 480 },
+    { "id": "outro", "from": 3660, "duration": 360 }
+  ],
+  "total": 4020,
+  "clicks": [2040, 2100, 2160, 2220, 2280, 2340],
+  "alarms": [2940],
+  "blips": [2760, 2850, 3030]
+}
