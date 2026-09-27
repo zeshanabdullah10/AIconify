@@ -32,7 +32,8 @@ function project(p: Partial<Project> = {}): Project {
   return { ...base, style: { ...base.style, primary: '#1f4d3a' }, ...p };
 }
 
-describe('generateIcons', () => {
+// These trace whole sheets (up to 20 icons with centerline fitting): about 3 s locally, more on CI runners.
+describe('generateIcons', { timeout: 20_000 }, () => {
   it('makes one sheet per 16 icons and returns traced icons', async () => {
     const { client, calls } = fakeClient({ chat: '{"icons":[{"name":"A","description":"a thing"}]}' });
     let spent = 0;
