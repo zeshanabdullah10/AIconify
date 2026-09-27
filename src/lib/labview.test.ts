@@ -37,6 +37,25 @@ describe('paths', () => {
       expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThanOrEqual(1);
     }
   });
+
+  it('keeps sub-pixel stems and bars one pixel wide instead of dropping them', () => {
+    const span = (d: string, i: 0 | 1) => {
+      const v = parseD(d).flatMap((s) => (s.c === 'Z' ? [] : [s.p[i]]));
+      return Math.max(...v) - Math.min(...v);
+    };
+    for (let x = 0; x < 3; x += 0.13) {
+      for (const w of [0.3, 0.6, 0.9]) {
+        expect(span(snapD(`M${x} 0L${x + w} 0L${x + w} 10L${x} 10Z`, 1), 0)).toBe(1);
+        expect(span(snapD(`M0 ${x}L10 ${x}L10 ${x + w}L0 ${x + w}Z`, 1.5), 1)).toBe(1.5);
+      }
+    }
+    // A thin ring: outer square and hole are separate subpaths, 0.6 apart.
+    const ring = parseD(snapD('M2.2 2.2L9.8 2.2L9.8 9.8L2.2 9.8ZM2.8 2.8L2.8 9.2L9.2 9.2L9.2 2.8Z', 1));
+    const xs = [...new Set(ring.flatMap((s) => (s.c === 'Z' ? [] : [s.p[0]])))].sort((a, b) => a - b);
+    expect(xs).toHaveLength(4);
+    expect(xs[1] - xs[0]).toBe(1);
+    expect(xs[3] - xs[2]).toBe(1);
+  });
 });
 
 describe('button states', () => {

@@ -13,6 +13,8 @@ Please report it privately through GitHub's **Report a vulnerability** button on
 - **OAuth sign-in** uses PKCE (S256). The app finishes a sign-in only if the same tab started it, so a crafted `?code=` link cannot connect you to someone else's OpenRouter account.
 - **Uploaded files.** Logos, SVGs included, are redrawn to a PNG on a canvas before they are stored or shown, and are always displayed through `<img>`. Their markup never goes into the page. PDFs are parsed in the browser, and only their text is sent to the model.
 - **Generated SVGs** come from the app's own tracer, which writes only `<path fill d>` elements. Model output is never inserted into the page as HTML.
+- **Reference icons** you upload to match an existing set are redrawn to PNG like logos, and only that PNG is stored or sent to the image model.
+- **Exported drawings** (button states, VI icons, status variants, indicators, EMF) are built from those same paths. Every color that goes into their markup is checked as a `#rrggbb` hex value first (`safeHex`), and VI icon banner text is drawn as pixel squares from a fixed font, so neither a typed color nor banner text can add markup to an SVG.
 
 ## Out of scope
 

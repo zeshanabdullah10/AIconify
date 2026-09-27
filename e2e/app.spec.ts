@@ -161,3 +161,87 @@ test('finishes the OpenRouter sign-in it started, and ignores planted codes', as
   expect(log.auth[0].body).toMatchObject({ code: 'good', code_challenge_method: 'S256' });
   expect(await page.evaluate(() => localStorage.getItem('aiconify.openrouter.key'))).toBe('sk-or-from-oauth');
 });
+
+test('industrial set: HMI look, reference icons, LabVIEW and indicator exports', async ({ page }) => {
+  const log = await mockOpenRouter(page);
+  await page.goto('/');
+  await page.getByLabel('Upload logo').setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: logoPng() });
+  await page.getByRole('button', { name: 'Analyze brand' }).click();
+  await expect(page.getByText('Brand analyzed.')).toBeVisible();
+  await page.getByRole('button', { name: 'Continue' }).click();
+
+  // Match an existing set: two SVG icons in one red, then take their color
+  const ref = (d: string) => Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="${d}" fill="#c0392b"/></svg>`);
+  await page.getByLabel('Upload reference icons').setInputFiles([
+    { name: 'valve.svg', mimeType: 'image/svg+xml', buffer: ref('M2 6l10 6-10 6zM22 6l-10 6 10 6z') },
+    { name: 'pump.svg', mimeType: 'image/svg+xml', buffer: ref('M4 12a8 8 0 1 0 16 0 8 8 0 1 0-16 0z') },
+  ]);
+  const refs = page.getByRole('list', { name: 'Reference icons' });
+  await expect(refs.getByRole('img')).toHaveCount(2);
+  await expect(refs.getByRole('img', { name: 'valve' })).toBeVisible();
+  const valvePng = await refs.getByRole('img', { name: 'valve' }).getAttribute('src');
+  await page.getByRole('button', { name: 'Use their color' }).click();
+  await expect(page.getByText(/Main color set to #[0-9A-F]{6} from your icons\./)).toBeVisible();
+  await expect(page.getByRole('radiogroup', { name: 'Main color' }).getByRole('radio', { name: /^Reference / })).toHaveAttribute('aria-checked', 'true');
+
+  // Industrial HMI look switches to one ISA-101 grey
+  await page.getByRole('radio', { name: 'Industrial HMI' }).click();
+  await expect(page.getByRole('radio', { name: 'HMI grey #4d4d4d' })).toHaveAttribute('aria-checked', 'true');
+
+  // Generate: the prompt carries the HMI style and the uploaded icons go first as references
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Generate icons' }).click();
+  await expect(page.getByText('16 icons ready.')).toBeVisible({ timeout: 30_000 });
+  const body = log.images[0].body;
+  expect(String(body.prompt)).toContain('ISA-101');
+  const inputs = (body.input_references as { image_url: { url: string } }[]).map((r) => r.image_url.url);
+  expect(inputs.length).toBeGreaterThanOrEqual(2);
+  expect(inputs[0]).toBe(valvePng);
+
+  await page.getByRole('button', { name: 'Review icons' }).click();
+  await page.getByRole('button', { name: 'Approve all' }).click();
+  await expect(page.getByText('16 icons · 16 approved')).toBeVisible();
+
+  // Export with every LabVIEW and industrial option on
+  await page.getByRole('button', { name: 'Export' }).click();
+  await expect(page.getByRole('heading', { name: 'Take it everywhere.' })).toBeVisible();
+  await page.getByRole('switch', { name: /^EMF/ }).click();
+  await page.getByRole('group', { name: 'PNG densities' }).getByRole('button', { name: '2×' }).click();
+  await page.getByRole('switch', { name: /^Button states/ }).click();
+  await expect(page.getByRole('list', { name: 'Button state preview' }).getByRole('listitem')).toHaveCount(4);
+  await page.getByRole('switch', { name: /^VI icons/ }).click();
+  await page.getByLabel(/^Banner text/).fill('daq');
+  await expect(page.getByRole('img', { name: /VI icon$/ })).toBeVisible();
+  await page.getByRole('switch', { name: /^Status variants/ }).click();
+  await expect(page.getByRole('list', { name: 'Status preview' }).getByRole('listitem')).toHaveCount(5);
+  await page.getByRole('switch', { name: /^Indicators/ }).click();
+  await page.getByRole('group', { name: 'Indicator kinds' }).getByRole('button', { name: 'Tank level' }).click();
+
+  const count = Number((await page.getByText(/^\d+ files$/).innerText()).split(' ')[0]);
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download zip' }).click()]);
+  const zip = await JSZip.loadAsync(await readFile((await download.path())!));
+  const files = Object.keys(zip.files).filter((f) => !zip.files[f].dir);
+  expect(files).toHaveLength(count); // the on-screen list and the zip come from one list
+
+  expect(files).toContain('png/48/cart.png');
+  expect(files).toContain('png/48/cart@2x.png');
+  expect(files).toContain('emf/cart.emf');
+  for (const s of ['false', 'true', 'false-to-true', 'true-to-false']) expect(files).toContain(`labview/buttons/cart/${s}.png`);
+  expect(files).toContain('labview/buttons/cart/true@2x.png');
+  expect(files).toContain('labview/buttons/cart/true.emf');
+  expect(files).toContain('labview/vi-icons/cart.png');
+  expect(files).toContain('labview/glyphs/cart.png');
+  for (const s of ['normal', 'warning', 'alarm', 'disabled', 'offline']) expect(files).toContain(`states/${s}/cart.svg`);
+  expect(files).toContain('labview/indicators/round-led-green-on.png');
+  expect(files).toContain('labview/indicators/round-led-red-off.svg');
+  expect(files).toContain('labview/indicators/tank-green-050.png');
+  expect(files).toContain('labview/README.md');
+
+  const emf = await zip.file('emf/cart.emf')!.async('uint8array');
+  expect(new TextDecoder().decode(emf.slice(40, 44))).toBe(' EMF');
+  const vi = await zip.file('labview/vi-icons/cart.png')!.async('uint8array');
+  expect(new DataView(vi.buffer, vi.byteOffset).getUint32(16)).toBe(32); // IHDR width
+  const alarm = await zip.file('states/alarm/cart.svg')!.async('string');
+  expect(alarm.toLowerCase()).toContain('#d62d20');
+  expect(await zip.file('labview/README.md')!.async('string')).toMatch(/LabVIEW/);
+});

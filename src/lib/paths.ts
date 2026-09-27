@@ -87,6 +87,10 @@ export function snapD(d: string, unit: number): string {
     subpaths[subpaths.length - 1]?.push(pts.length - 1);
   });
   const snap = (v: number) => Math.round(v / unit) * unit;
+  // Straight vertical (x) and horizontal (y) edges: where they are, where they snap to, and the
+  // span they cover along the other axis.
+  type Edge = { a: (typeof pts)[number]; b: (typeof pts)[number]; axis: 'x' | 'y'; at: number; to: number; lo: number; hi: number };
+  const edges: Edge[] = [];
   for (const sub of subpaths) {
     for (let k = 0; k < sub.length; k++) {
       const a = pts[sub[k]];
@@ -97,15 +101,31 @@ export function snapD(d: string, unit: number): string {
       const dx = Math.abs(b.x - a.x);
       const dy = Math.abs(b.y - a.y);
       if (dy > 0 && dx <= dy * 0.08) {
-        const x = snap((a.x + b.x) / 2);
-        a.sx ??= x;
-        b.sx ??= x;
+        const at = (a.x + b.x) / 2;
+        edges.push({ a, b, axis: 'x', at, to: snap(at), lo: Math.min(a.y, b.y), hi: Math.max(a.y, b.y) });
       } else if (dx > 0 && dy <= dx * 0.08) {
-        const y = snap((a.y + b.y) / 2);
-        a.sy ??= y;
-        b.sy ??= y;
+        const at = (a.y + b.y) / 2;
+        edges.push({ a, b, axis: 'y', at, to: snap(at), lo: Math.min(a.x, b.x), hi: Math.max(a.x, b.x) });
       }
     }
+  }
+  // A bar thinner than a pixel has both sides round to the same line and would vanish. Keep it one
+  // pixel wide: move whichever side rounding moved further one pixel back towards where it was.
+  for (const axis of ['x', 'y'] as const) {
+    const list = edges.filter((e) => e.axis === axis).sort((e, f) => e.at - f.at);
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length && list[j].at - list[i].at < 2 * unit; j++) {
+        const [e, f] = [list[i], list[j]];
+        if (e.to !== f.to || f.at - e.at < unit * 0.05 || Math.min(e.hi, f.hi) <= Math.max(e.lo, f.lo)) continue;
+        if (Math.abs(f.at - f.to) >= Math.abs(e.at - e.to)) f.to += unit;
+        else e.to -= unit;
+      }
+    }
+  }
+  for (const e of edges) {
+    const key = e.axis === 'x' ? 'sx' : 'sy';
+    e.a[key] ??= e.to;
+    e.b[key] ??= e.to;
   }
   const moved = segs.map((seg) => (seg.c === 'Z' ? seg : ({ ...seg, p: [...seg.p] } as Seg)));
   for (const pt of pts) {
