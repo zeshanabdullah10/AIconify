@@ -4,6 +4,10 @@ Turn a logo and brand guidelines into a consistent, production-ready icon set, u
 
 AIconify reads your brand with a cheap vision model, draws the whole set on **one image** so every icon shares the same style, cuts that image into separate icons, and traces them to clean 24×24 SVGs. Line icons come back as real strokes, so their weight can change after the fact. The part of an icon that moves or lights up (a pump's impeller, a valve's disc) can be traced as its own layer, and buttons and HMI states light up just that part. It exports SVG, PNG, EMF, React components, a sprite and a Figma-ready sheet, and for test and automation teams a LabVIEW and HMI pack: button states in four styles, VI icons, equipment states and indicator lamps.
 
+[![AIconify product film: a one-minute tour from brand to LabVIEW front panel](docs/aiconify-film.jpg)](docs/aiconify-film.mp4)
+
+*Watch the one-minute film ([MP4, 38 MB](docs/aiconify-film.mp4)). It was made with Remotion, and every icon and button in it is drawn by the app's own code; see [`video/`](video/).*
+
 It runs entirely in your browser. There is no server: you connect your own [OpenRouter](https://openrouter.ai) account, and your key, logo and icons never leave your machine except to go to OpenRouter.
 
 ## How it works
