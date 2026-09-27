@@ -1,0 +1,46 @@
+
+> aiconify@0.1.0 smoke
+> LIVE=1 vitest run
+
+
+ RUN  v5.0.2 /home/user/AIconify
+
+stdout | src/smoke.live.test.ts > live OpenRouter
+┌─────────┬──────────────────────────────┬─────────────┐
+│ (index) │ step                         │ usd         │
+├─────────┼──────────────────────────────┼─────────────┤
+│ 0       │ 'brand'                      │ 0.000647595 │
+│ 1       │ 'openai/gpt-image-2.5-flare' │ 0.00033575  │
+│ 2       │ 'openai/gpt-image-2.5-flare' │ 0.007605    │
+│ 3       │ 'openai/gpt-image-1-mini'    │ 0.0003182   │
+│ 4       │ 'openai/gpt-image-1-mini'    │ 0.002882    │
+└─────────┴──────────────────────────────┴─────────────┘
+TOTAL: $0.0118
+
+ ❯ src/smoke.live.test.ts (3 tests | 1 failed) 30417ms
+   ❯ live OpenRouter (3)
+     × DeepSeek V4.1 Flash reads the logo 4727ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/smoke.live.test.ts > live OpenRouter > DeepSeek V4.1 Flash reads the logo
+SyntaxError: Unexpected non-whitespace character after JSON at position 24 (line 2 column 1)
+ ❯ parseJson src/lib/prompts.ts:103:15
+    101|   const end = body.lastIndexOf('}');
+    102|   if (start < 0 || end <= start) throw new Error('The model did not re…
+    103|   return JSON.parse(body.slice(start, end + 1)) as T;
+       |               ^
+    104| }
+    105|
+ ❯ parseBrand src/lib/prompts.ts:156:15
+ ❯ analyzeBrand src/lib/pipeline.ts:252:20
+ ❯ src/smoke.live.test.ts:53:33
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed (3)
+   Start at  13:43:04
+   Duration  31.65s (tests 97%, environment 2%, transform 1%)
+
