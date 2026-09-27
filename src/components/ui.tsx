@@ -257,11 +257,14 @@ export function DropZone({
   onFile,
   children,
   label,
+  multiple,
 }: {
   accept: string;
   onFile: (f: File) => void;
   children: ReactNode;
   label: string;
+  /** Call onFile once per dropped or chosen file. */
+  multiple?: boolean;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const id = useId();
@@ -275,8 +278,8 @@ export function DropZone({
       onDrop={(e) => {
         e.preventDefault();
         delete e.currentTarget.dataset.over;
-        const f = e.dataTransfer.files?.[0];
-        if (f) onFile(f);
+        const list = [...(e.dataTransfer.files ?? [])];
+        (multiple ? list : list.slice(0, 1)).forEach(onFile);
       }}
       className="group relative rounded-[16px] border-[1.5px] border-dashed border-line-strong data-[over=true]:border-accent data-[over=true]:bg-accent-soft transition-colors"
     >
@@ -288,10 +291,11 @@ export function DropZone({
         ref={input}
         type="file"
         accept={accept}
+        multiple={multiple}
         className="sr-only"
         onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) onFile(f);
+          const list = [...(e.target.files ?? [])];
+          (multiple ? list : list.slice(0, 1)).forEach(onFile);
           e.target.value = '';
         }}
       />

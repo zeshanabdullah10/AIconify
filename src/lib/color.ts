@@ -72,3 +72,23 @@ export function findHexColors(text: string): string[] {
   for (const m of text.matchAll(/#([0-9a-f]{6}|[0-9a-f]{3})\b/gi)) found.add(normalizeHex(m[0]));
   return [...found];
 }
+
+/** Blend `a` toward `b` by t (0 = a, 1 = b). */
+export function mix(a: string, b: string, t: number): string {
+  const x = hexToRgb(a);
+  const y = hexToRgb(b);
+  return rgbToHex({ r: x.r + (y.r - x.r) * t, g: x.g + (y.g - x.g) * t, b: x.b + (y.b - x.b) * t });
+}
+
+export const darken = (hex: string, t: number) => mix(hex, '#000000', t);
+export const lighten = (hex: string, t: number) => mix(hex, '#ffffff', t);
+
+/** A validated #rrggbb, or the fallback. Guards every colour that ends up inside SVG markup. */
+export function safeHex(value: string | undefined, fallback: string): string {
+  return value && isHex(value) ? normalizeHex(value) : fallback;
+}
+
+/** White or near-black, whichever reads better on `bg`. */
+export function onColor(bg: string): string {
+  return contrastRatio(bg, '#ffffff') >= contrastRatio(bg, '#1d1d1f') ? '#ffffff' : '#1d1d1f';
+}

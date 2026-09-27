@@ -1,6 +1,7 @@
 import JSZip from 'jszip';
 import { GREEN, fillRect, makeSheet, nodeCodec, toPngDataUrl } from '../test/fixtures';
 import { buildZip, planFiles } from './exporter';
+import { emfRecords } from './emf';
 import type { Client, ImageRequest } from './openrouter';
 import { analyzeBrand, editIcon, generateIcons, iconPalette, iconVariations, retraceAll, type Deps } from './pipeline';
 import { createRaster } from './raster';
@@ -162,7 +163,7 @@ describe('export', () => {
       ],
     });
     const o = { ...p.exportOptions, sprite: true, pngSizes: [24] };
-    const planned = planFiles(['Coffee cup', 'Coffee cup'], o);
+    const planned = planFiles(p, o);
     expect(planned).toContain('svg/coffee-cup.svg');
     expect(planned).toContain('svg/coffee-cup-2.svg');
     expect(planned).toContain('react/CoffeeCup2.tsx');
@@ -178,5 +179,99 @@ describe('export', () => {
     expect(readme).toContain('title="Coffee cup"');
     const sprite = await zip.file('sprite.svg')!.async('string');
     expect(sprite).toContain('<symbol id="coffee-cup"');
+  });
+});
+
+describe('LabVIEW and industrial export', () => {
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#1f4d3a" d="M2 2L22 2L22 22L2 22Z"/></svg>';
+  const p = project({ icons: [{ id: 'a', name: 'Pump', status: 'approved', svg, flags: [], history: [] }] });
+  const all = {
+    ...p.exportOptions,
+    svg: false,
+    png: true,
+    pngSizes: [24],
+    pngScales: [1, 2],
+    react: false,
+    figma: false,
+    emf: true,
+    buttons: true,
+    viIcons: true,
+    bannerText: 'Pumps',
+    states: true,
+    indicators: true,
+    indicatorKinds: ['round-led', 'tank'],
+    indicatorColors: ['#2fb344'],
+  };
+
+  it('lists exactly what it zips, with every density and state', async () => {
+    const planned = planFiles(p, all);
+    expect(planned).toEqual(
+      expect.arrayContaining([
+        'png/24/pump.png',
+        'png/24/pump@2x.png',
+        'emf/pump.emf',
+        'labview/buttons/pump/false.png',
+        'labview/buttons/pump/true@2x.png',
+        'labview/buttons/pump/false-to-true.emf',
+        'labview/buttons/pump/true-to-false.png',
+        'labview/vi-icons/pump.png',
+        'labview/glyphs/pump.png',
+        'states/alarm/pump.svg',
+        'states/offline/pump.png',
+        'labview/indicators/round-led-green-on.png',
+        'labview/indicators/tank-green-050.svg',
+        'labview/README.md',
+      ]),
+    );
+    const zip = await JSZip.loadAsync(await buildZip(p, all, async (_svg, size) => new Uint8Array([size])));
+    const names = Object.keys(zip.files).filter((n) => !zip.files[n].dir);
+    expect(names.sort()).toEqual([...planned].sort());
+    // @2x doubles the pixel size; VI icons are always 32
+    expect(await zip.file('png/24/pump@2x.png')!.async('uint8array')).toEqual(new Uint8Array([48]));
+    expect(await zip.file('labview/vi-icons/pump.png')!.async('uint8array')).toEqual(new Uint8Array([32]));
+    expect(emfRecords(await zip.file('emf/pump.emf')!.async('uint8array'))[0].type).toBe(1);
+    const emf = await zip.file('labview/buttons/pump/true.emf')!.async('uint8array');
+    expect(emfRecords(emf).at(-1)!.type).toBe(14);
+    const guide = await zip.file('labview/README.md')!.async('string');
+    expect(guide).toContain('Customize');
+    expect(guide).toContain('Picture Ring');
+  });
+
+  it('snaps small PNGs to the pixel grid only when asked', async () => {
+    const rendered: string[] = [];
+    const tilted = { ...p, icons: [{ ...p.icons[0], svg: svg.replace('M2 2', 'M2.4 2.3') }] };
+    const o = { ...all, buttons: false, viIcons: false, states: false, indicators: false, emf: false, pngScales: [1] };
+    await buildZip(tilted, o, async (s) => (rendered.push(s), new Uint8Array()));
+    expect(rendered[0]).toContain('M2 2');
+    rendered.length = 0;
+    await buildZip(tilted, { ...o, pixelSnap: false }, async (s) => (rendered.push(s), new Uint8Array()));
+    expect(rendered[0]).toContain('M2.4 2.3');
+  });
+
+  it('exports indicators even before any icon exists', () => {
+    const empty = project();
+    expect(planFiles(empty, { ...all, buttons: false })).toContain('labview/indicators/round-led-green-off.svg');
+  });
+});
+
+describe('reference icons', () => {
+  it('sends uploaded icons first, then approved ones, and says to match them', async () => {
+    const { client, calls } = fakeClient();
+    const ref = toPngDataUrl(makeSheet(32));
+    const approved = toPngDataUrl(makeSheet(48));
+    const p = project({
+      references: [{ id: 'r', name: 'existing', png: ref }],
+      icons: [{ id: 'a', name: 'Cup', status: 'approved', png: approved, svg: '<svg/>', flags: [], history: [] }],
+    });
+    await generateIcons({ client, codec: nodeCodec, onCost: () => {} }, p, ['Home']);
+    expect(calls.images[0].input_references).toEqual([ref, approved]);
+    expect(calls.images[0].prompt).toContain('Match the exact style');
+  });
+
+  it('adds the HMI style sentence to every prompt', async () => {
+    const { client, calls } = fakeClient();
+    const p = project();
+    await generateIcons({ client, codec: nodeCodec, onCost: () => {} }, { ...p, style: { ...p.style, hmi: true } }, ['Pump']);
+    expect(calls.images[0].prompt).toContain('ISA-101');
   });
 });

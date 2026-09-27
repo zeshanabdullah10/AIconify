@@ -35,6 +35,8 @@ export interface StyleLock {
   colorMode: ColorMode;
   primary: string;
   accent: string;
+  /** Industrial HMI look (ISA-101): muted, functional symbols; colour only for alarms. */
+  hmi?: boolean;
 }
 
 export type IconStatus = 'draft' | 'flagged' | 'approved';
@@ -87,6 +89,29 @@ export interface ExportOptions {
   figma: boolean;
   naming: 'kebab' | 'pascal' | 'snake';
   prefix: string;
+  /** Extra PNG densities for high-DPI screens; 1 is always the base size. */
+  pngScales: number[];
+  /** Snap edges to whole pixels for PNGs up to 64 px. */
+  pixelSnap: boolean;
+  emf: boolean;
+  buttons: boolean;
+  buttonSize: number;
+  viIcons: boolean;
+  bannerText: string;
+  bannerColor: string;
+  states: boolean;
+  indicators: boolean;
+  indicatorKinds: string[];
+  indicatorColors: string[];
+  indicatorSize: number;
+}
+
+/** An icon from the user's existing set, used as a style reference for new sheets. */
+export interface ReferenceIcon {
+  id: string;
+  name: string;
+  /** 256×256 transparent PNG data URL. */
+  png: string;
 }
 
 export interface Project {
@@ -95,6 +120,7 @@ export interface Project {
   style: StyleLock;
   iconNames: string[];
   icons: IconItem[];
+  references: ReferenceIcon[];
   runs: SheetRun[];
   modelId: string;
   quality: Quality;

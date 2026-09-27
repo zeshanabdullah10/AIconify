@@ -15,4 +15,16 @@ export const ICON_PACKS: Record<string, string[]> = {
     'Coffee cup', 'Coffee beans', 'Croissant', 'Takeaway cup', 'Menu', 'Chef hat', 'Leaf', 'Timer',
     'Table reservation', 'Delivery bike', 'Loyalty card', 'Water drop', 'Fork and knife', 'Store', 'Gift card', 'Calendar',
   ],
+  Instrumentation: [
+    'Oscilloscope', 'Multimeter', 'Signal generator', 'Power supply', 'DAQ device', 'Thermocouple', 'Pressure sensor', 'Strain gauge',
+    'Relay', 'Motor', 'Encoder', 'Camera', 'Serial port', 'Network', 'USB device', 'Calibration',
+  ],
+  'Process equipment': [
+    'Valve', 'Control valve', 'Pump', 'Compressor', 'Fan', 'Tank', 'Heater', 'Heat exchanger',
+    'Mixer', 'Filter', 'Flow meter', 'Level sensor', 'Pipe', 'Conveyor', 'Boiler', 'Chiller',
+  ],
+  'Test sequencer': [
+    'Run', 'Pause', 'Stop', 'Abort', 'Step into', 'Skip', 'Loop', 'Retry',
+    'Pass', 'Fail', 'Report', 'Log', 'Limits', 'Configure', 'Station', 'Operator',
+  ],
 };

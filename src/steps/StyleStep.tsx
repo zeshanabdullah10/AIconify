@@ -1,11 +1,16 @@
 import { useState } from 'react';
 import { StepHeader, Swatch } from '../components/StepHeader';
 import { Icon } from '../components/icons';
-import { Button, Card, CardHeader, Segmented, cx } from '../components/ui';
-import { MAX_PER_SHEET, suggestIcons } from '../lib/pipeline';
+import { Button, Card, CardHeader, DropZone, Segmented, Spinner, cx } from '../components/ui';
+import { readFileAsDataUrl } from '../lib/codec';
+import { luminance } from '../lib/color';
+import { getModel } from '../lib/models';
+import { extractPalette } from '../lib/palette';
+import { MAX_PER_SHEET, suggestIcons, uid } from '../lib/pipeline';
+import { ensureTransparent, fitSquare } from '../lib/raster';
 import { ICON_PACKS } from '../lib/presets';
 import { STYLE_LABELS, styleLock } from '../lib/prompts';
-import type { IconStyle, StyleLock } from '../lib/types';
+import type { IconStyle, ReferenceIcon, StyleLock } from '../lib/types';
 import { errorText, useStore } from '../store';
 
 const SAMPLE = [
@@ -67,7 +72,8 @@ export function StyleStep({ onNext }: { onNext: () => void }) {
   };
 
   const sheets = Math.ceil(names.length / MAX_PER_SHEET);
-  const colors = project.brand.palette.length ? project.brand.palette : [{ role: 'Ink', hex: s.primary }];
+  const base = project.brand.palette.length ? project.brand.palette : [{ role: 'Ink', hex: s.primary }];
+  const colors = s.hmi && !base.some((c) => c.hex === HMI_GREY) ? [...base, { role: 'HMI grey', hex: HMI_GREY }] : base;
 
   return (
     <>
@@ -82,6 +88,7 @@ export function StyleStep({ onNext }: { onNext: () => void }) {
         }
       />
       <div className="grid lg:grid-cols-[1.05fr_1fr] gap-5">
+        <div className="flex flex-col gap-5">
         <Card className="p-5 sm:p-6 flex flex-col gap-6">
           <div>
             <CardHeader title="Icon style" />
@@ -118,6 +125,22 @@ export function StyleStep({ onNext }: { onNext: () => void }) {
             <Row label="Corners">
               <Segmented label="Corners" value={s.corners} onChange={(v) => setStyle({ corners: v })} options={[{ value: 'rounded', label: 'Rounded' }, { value: 'sharp', label: 'Sharp' }]} />
             </Row>
+            <Row label="Look">
+              <Segmented
+                label="Look"
+                value={s.hmi ? 'hmi' : 'brand'}
+                onChange={(v) => setStyle(v === 'hmi' ? { hmi: true, colorMode: 'mono', primary: HMI_GREY } : { hmi: false })}
+                options={[
+                  { value: 'brand', label: 'Brand' },
+                  { value: 'hmi', label: 'Industrial HMI' },
+                ]}
+              />
+            </Row>
+            {s.hmi ? (
+              <p className="text-[13px] text-ink-2 -mt-2 sm:pl-28">
+                ISA-101 style: muted grey symbols. Color is kept for alarm and warning states, which you can export in step 5.
+              </p>
+            ) : null}
             <Row label="Colors">
               <Segmented label="Color mode" value={s.colorMode} onChange={(v) => setStyle({ colorMode: v })} options={[{ value: 'brand', label: 'Brand' }, { value: 'mono', label: 'One color' }]} />
             </Row>
@@ -131,6 +154,8 @@ export function StyleStep({ onNext }: { onNext: () => void }) {
             ) : null}
           </div>
         </Card>
+        <References />
+        </div>
 
         <Card className="p-5 sm:p-6 flex flex-col gap-5">
           <CardHeader
@@ -190,6 +215,91 @@ export function StyleStep({ onNext }: { onNext: () => void }) {
         </Card>
       </div>
     </>
+  );
+}
+
+const HMI_GREY = '#4d4d4d';
+const MAX_REFERENCES = 8;
+
+/** Upload icons from an existing set; new sheets are drawn to match them. */
+function References() {
+  const { project, update, codec, notify } = useStore();
+  const [reading, setReading] = useState(0);
+  const refs = project.references ?? [];
+  const model = getModel(project.modelId);
+
+  const onFile = async (file: File) => {
+    if (!/^image\//.test(file.type)) return notify('References must be PNG, SVG, JPG or WebP images.', 'error');
+    setReading((n) => n + 1);
+    try {
+      const img = await codec.decode(await readFileAsDataUrl(file));
+      // Opaque icons (a JPG on white) get their background keyed out, then the same padding as ours.
+      const png = await codec.encode(fitSquare(ensureTransparent(img), 256));
+      const ref: ReferenceIcon = { id: uid(), name: file.name.replace(/\.[^.]+$/, ''), png };
+      update((p) => {
+        const list = p.references ?? [];
+        if (list.length >= MAX_REFERENCES) return p;
+        return { ...p, references: [...list, ref] };
+      });
+    } catch (e) {
+      notify(errorText(e), 'error');
+    } finally {
+      setReading((n) => n - 1);
+    }
+  };
+
+  const useColors = async () => {
+    try {
+      const swatches = (await Promise.all(refs.map(async (r) => extractPalette(await codec.decode(r.png), 3)))).flat();
+      const ink = swatches.filter((c) => luminance(c.hex) < 0.85).sort((a, b) => b.share - a.share)[0];
+      if (!ink) return notify('No clear icon color found in the references.', 'info');
+      update((p) => ({
+        ...p,
+        brand: p.brand.palette.some((c) => c.hex === ink.hex) ? p.brand : { ...p.brand, palette: [...p.brand.palette, { role: 'Reference', hex: ink.hex }] },
+        style: { ...p.style, primary: ink.hex },
+      }));
+      notify(`Main color set to ${ink.hex.toUpperCase()} from your icons.`, 'success');
+    } catch (e) {
+      notify(errorText(e), 'error');
+    }
+  };
+
+  return (
+    <Card className="p-5 sm:p-6 flex flex-col gap-4" aria-label="Match an existing icon set">
+      <CardHeader
+        title="Match an existing icon set"
+        detail="Optional. Add a few icons you already use and new ones are drawn to match them."
+        action={refs.length ? <Button size="sm" onClick={useColors}>Use their color</Button> : null}
+      />
+      {refs.length ? (
+        <ul aria-label="Reference icons" className="grid grid-cols-4 sm:grid-cols-8 gap-2">
+          {refs.map((r) => (
+            <li key={r.id} className="group relative aspect-square rounded-[12px] bg-paper p-2 shadow-[inset_0_0_0_1px_var(--color-line)]">
+              <img src={r.png} alt={r.name} className="w-full h-full object-contain" />
+              <button
+                type="button"
+                aria-label={`Remove reference ${r.name}`}
+                onClick={() => update((p) => ({ ...p, references: (p.references ?? []).filter((x) => x.id !== r.id) }))}
+                className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-card text-ink-2 flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100 focus:opacity-100 cursor-pointer"
+              >
+                <Icon name="x" size={12} strokeWidth={2.4} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {refs.length < MAX_REFERENCES ? (
+        <DropZone accept="image/png,image/svg+xml,image/jpeg,image/webp" onFile={onFile} label="Upload reference icons" multiple>
+          <div className="flex items-center gap-3 p-4 text-[14px] text-ink-2">
+            {reading ? <Spinner /> : <Icon name="upload" size={18} />}
+            Drop up to {MAX_REFERENCES} icons (SVG or PNG), or click to choose
+          </div>
+        </DropZone>
+      ) : null}
+      {refs.length > 0 && model.maxRefs === 0 ? (
+        <p className="text-[13px] text-warning">{model.label} can’t use reference images. Pick another model in step 3 to match these.</p>
+      ) : null}
+    </Card>
   );
 }
 

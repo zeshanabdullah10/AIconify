@@ -92,11 +92,11 @@ async function writeBriefs(deps: Deps, names: string[], brand: BrandKit, lock: s
   }
 }
 
+/** Style references: the user's own existing icons first, then icons approved in this set. */
 function references(project: Project, max: number, exclude?: string): string[] {
-  return project.icons
-    .filter((i) => i.status === 'approved' && i.png && i.id !== exclude)
-    .slice(0, max)
-    .map((i) => i.png!);
+  const uploaded = (project.references ?? []).map((r) => r.png);
+  const approved = project.icons.filter((i) => i.status === 'approved' && i.png && i.id !== exclude).map((i) => i.png!);
+  return [...uploaded, ...approved].slice(0, max);
 }
 
 async function requestImages(deps: Deps, project: Project, prompt: string, n: number, refs: string[]) {

@@ -31,7 +31,10 @@ export function styleLock(s: StyleLock, brand: BrandKit): string {
       : `Use only ${s.primary} and ${s.accent}${s.style === 'badge' ? ' plus white' : ''}.`;
   const mood = brand.traits.length ? ` Mood: ${brand.traits.slice(0, 5).join(', ').toLowerCase()}.` : '';
   const dont = brand.donts.length ? ` Avoid: ${brand.donts.slice(0, 4).join('; ').toLowerCase()}.` : '';
-  return `Style: ${styleSentence(s)}. Flat vector look, no gradients, no shadows, no 3D, no textures. ${colors}${mood}${dont}`;
+  const hmi = s.hmi
+    ? ' Industrial HMI symbols in the ISA-101 high-performance style: functional, schematic and technical, like equipment on a control-room screen; readable at 16 px; no decoration, no people, no mascots.'
+    : '';
+  return `Style: ${styleSentence(s)}. Flat vector look, no gradients, no shadows, no 3D, no textures. ${colors}${hmi}${mood}${dont}`;
 }
 
 export interface SheetSpec {
